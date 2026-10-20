@@ -25,6 +25,8 @@ export const AuthProvider = ({ children }) => {
       id: supabaseUser.id,
       email: supabaseUser.email,
       name: formattedName,
+      username: metadata.username || nameFromEmail.toLowerCase(),
+      phone: metadata.phone || supabaseUser.phone || '+91 98201 44820',
       role: metadata.role || 'collector',
       studio: metadata.studio || null,
       isSupabase: true
@@ -134,6 +136,8 @@ export const AuthProvider = ({ children }) => {
     const demoUser = {
       id: 'demo-' + Date.now(),
       name: formattedName,
+      username: nameFromEmail.toLowerCase(),
+      phone: '+91 98201 44820',
       email,
       role: 'collector',
       isSupabase: false
@@ -161,6 +165,8 @@ export const AuthProvider = ({ children }) => {
         options: {
           data: {
             full_name: name.trim(),
+            username: email.split('@')[0].toLowerCase(),
+            phone: '+91 98201 44820',
             role: role || 'collector'
           }
         }
@@ -192,6 +198,8 @@ export const AuthProvider = ({ children }) => {
     const demoUser = {
       id: 'demo-' + Date.now(),
       name,
+      username: email.split('@')[0].toLowerCase(),
+      phone: '+91 98201 44820',
       email,
       role: role || 'collector',
       isSupabase: false
@@ -229,6 +237,35 @@ export const AuthProvider = ({ children }) => {
     };
   };
 
+  // Update profile details
+  const updateProfile = async (updates) => {
+    const updated = {
+      ...user,
+      ...updates
+    };
+    setUser(updated);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.auth.updateUser({
+          data: {
+            full_name: updates.name || user?.name,
+            username: updates.username || user?.username,
+            phone: updates.phone || user?.phone,
+            studio: updates.studio || user?.studio
+          }
+        });
+      } catch (err) {
+        console.warn('Error saving profile to Supabase:', err);
+      }
+    } else {
+      localStorage.setItem(DEMO_USER_STORAGE_KEY, JSON.stringify(updated));
+    }
+
+    addToast('Account details updated successfully.');
+    return { success: true };
+  };
+
   // Sign out
   const signOut = async () => {
     if (isSupabaseConfigured && supabase) {
@@ -249,6 +286,7 @@ export const AuthProvider = ({ children }) => {
         signIn,
         signUp,
         signInWithGoogle,
+        updateProfile,
         signOut,
         isAuthenticated: !!user,
         isSupabaseConfigured

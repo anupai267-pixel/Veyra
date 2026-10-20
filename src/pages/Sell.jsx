@@ -1,35 +1,62 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useProducts } from '../context/ProductsContext';
+import { useAuctions } from '../context/AuctionContext';
 import { useAuth } from '../context/AuthContext';
 import { formatINR } from '../data/products';
-import { Upload, CheckCircle2, ArrowRight, Eye, Image as ImageIcon, Sparkles, AlertCircle, Lock } from 'lucide-react';
+import {
+  Upload,
+  CheckCircle2,
+  ArrowRight,
+  Eye,
+  Image as ImageIcon,
+  Lock,
+  Plus,
+  Trash2,
+  Gavel,
+  ShoppingBag,
+  Store,
+  ShieldCheck
+} from 'lucide-react';
 
 export const Sell = () => {
   const navigate = useNavigate();
   const { addProduct, customProducts } = useProducts();
+  const { liveAuctions } = useAuctions();
   const { user } = useAuth();
 
-  const sellerDisplayName = user 
-    ? (user.user_metadata?.full_name || user.name || user.email?.split('@')[0] || 'Studio Anam')
-    : 'Studio Anam';
+  const sellerDisplayName = user
+    ? (user.name || user.studio || 'Studio Atelier')
+    : 'Studio Atelier';
+
+  const [listingType, setListingType] = useState('direct'); // 'direct' or 'auction'
 
   const [formData, setFormData] = useState({
     name: 'Hand-Carved Stone Reflection Dish',
     seller: sellerDisplayName,
     category: 'Handmade',
     price: 16500,
+    startingBid: 12000,
+    minIncrement: 1000,
+    durationHours: 4,
     location: 'Jaipur, India',
     image: 'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?auto=format&fit=crop&w=1000&q=80',
+    images: [
+      'https://images.unsplash.com/photo-1578749556568-bc2c40e68b61?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=1000&q=80'
+    ],
     description: 'Sculpted from local soapstone with a satin-buffed finish and natural geological striations.',
     materials: 'High-density grey soapstone, botanical wax buff',
-    dimensions: '22cm Ø × 4.5cm H'
+    dimensions: '22cm Ø × 4.5cm H',
+    provenance: 'Master carver studio piece, Jaipur Guild hallmark',
+    condition: 'Pristine Studio Original'
   });
 
+  const [newImageUrl, setNewImageUrl] = useState('');
   const [submittedItem, setSubmittedItem] = useState(null);
   const [error, setError] = useState('');
 
-  // Sample curated image presets for convenience in demo testing
+  // Sample curated image presets
   const imagePresets = [
     {
       label: 'Ceramic Stoneware',
@@ -53,7 +80,30 @@ export const Sell = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Support local image file upload preview using HTML5 FileReader
+  const handleAddImage = () => {
+    if (!newImageUrl.trim()) return;
+    if (formData.images.length >= 6) {
+      setError('You can attach up to 6 images per object listing.');
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      images: [...prev.images, newImageUrl.trim()]
+    }));
+    setNewImageUrl('');
+  };
+
+  const handleRemoveImage = (idx) => {
+    setFormData((prev) => {
+      const updated = prev.images.filter((_, i) => i !== idx);
+      return {
+        ...prev,
+        images: updated,
+        image: updated[0] || ''
+      };
+    });
+  };
+
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -63,7 +113,12 @@ export const Sell = () => {
       }
       const reader = new FileReader();
       reader.onload = (event) => {
-        setFormData((prev) => ({ ...prev, image: event.target?.result }));
+        const dataUrl = event.target?.result;
+        setFormData((prev) => ({
+          ...prev,
+          image: dataUrl,
+          images: prev.images.length < 6 ? [...prev.images, dataUrl] : prev.images
+        }));
       };
       reader.readAsDataURL(file);
     }
@@ -92,23 +147,26 @@ export const Sell = () => {
 
     const created = addProduct({
       ...formData,
-      price: priceNum
+      sellerId: user.id, // Enforce seller ownership
+      price: priceNum,
+      isAuction: listingType === 'auction',
+      startingBid: listingType === 'auction' ? Number(formData.startingBid) || priceNum : undefined
     });
 
     setSubmittedItem(created);
   };
 
   return (
-    <div style={{ paddingTop: '40px', paddingBottom: '96px' }}>
-      <div className="container" style={{ maxWidth: '1040px' }}>
+    <div style={{ paddingTop: '40px', paddingBottom: '96px', backgroundColor: 'var(--bg-primary)' }}>
+      <div className="container" style={{ maxWidth: '1060px' }}>
         {/* Seller Introduction Header */}
-        <div style={{ marginBottom: '40px', textAlign: 'center', maxWidth: '640px', margin: '0 auto 40px' }}>
-          <span className="eyebrow">Atelier Application</span>
-          <h1 style={{ fontSize: 'clamp(2.2rem, 4vw, 3rem)', marginBottom: '12px' }}>
+        <div style={{ marginBottom: '36px', textAlign: 'center', maxWidth: '640px', margin: '0 auto 36px' }}>
+          <span className="eyebrow">Atelier Workshop Portal</span>
+          <h1 style={{ fontSize: 'clamp(2.2rem, 4vw, 3rem)', marginBottom: '10px' }}>
             Sell on VEYRA
           </h1>
           <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}>
-            We invite independent ceramists, sculptors, woodturners, and textile artists to list distinctive works for our global collector community.
+            List studio ceramics, cast bronzes, archival monotypes, and living art for our global collector community.
           </p>
         </div>
 
@@ -158,26 +216,6 @@ export const Sell = () => {
           </div>
         )}
 
-        {/* Prototype Demo Banner */}
-        <div
-          style={{
-            backgroundColor: 'var(--surface-secondary)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-xs)',
-            padding: '14px 18px',
-            marginBottom: '36px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px'
-          }}
-        >
-          <Sparkles size={18} color="var(--accent-burgundy)" />
-          <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
-            <strong style={{ color: 'var(--text-primary)' }}>Notice: </strong>
-            Client-side listing preview. Production marketplace items will sync to Supabase once real database schemas are deployed.
-          </p>
-        </div>
-
         {/* Success Confirmation Card */}
         {submittedItem && (
           <div
@@ -199,13 +237,13 @@ export const Sell = () => {
               <div>
                 <h4 style={{ fontSize: '1.15rem', margin: 0 }}>Object Listed Successfully!</h4>
                 <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
-                  "{submittedItem.name}" has been published to your local catalog.
+                  "{submittedItem.name}" has been registered in the Veyra catalog under your maker profile.
                 </p>
               </div>
             </div>
 
-            <Link to="/explore" className="btn btn-burgundy btn-sm">
-              <span>View in catalog</span>
+            <Link to={`/product/${submittedItem.id}`} className="btn btn-burgundy btn-sm">
+              <span>View in Catalog</span>
               <ArrowRight size={14} />
             </Link>
           </div>
@@ -230,9 +268,31 @@ export const Sell = () => {
               borderRadius: 'var(--radius-xs)'
             }}
           >
-            <h3 style={{ fontSize: '1.35rem', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
-              Object Specifications
-            </h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '14px', marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '1.35rem', margin: 0 }}>Object Specifications</h3>
+
+              {/* Listing Format Selector */}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => setListingType('direct')}
+                  className={`btn btn-sm ${listingType === 'direct' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '11px', height: '32px' }}
+                >
+                  <ShoppingBag size={12} />
+                  <span>Marketplace Sale</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setListingType('auction')}
+                  className={`btn btn-sm ${listingType === 'auction' ? 'btn-burgundy' : 'btn-secondary'}`}
+                  style={{ fontSize: '11px', height: '32px' }}
+                >
+                  <Gavel size={12} />
+                  <span>Live Auction Lot</span>
+                </button>
+              </div>
+            </div>
 
             <div className="form-group">
               <label className="form-label" htmlFor="name">
@@ -306,7 +366,7 @@ export const Sell = () => {
 
               <div className="form-group">
                 <label className="form-label" htmlFor="price">
-                  Price in INR (₹) *
+                  {listingType === 'auction' ? 'Estimated Lot Value (₹) *' : 'Price in INR (₹) *'}
                 </label>
                 <input
                   id="price"
@@ -323,51 +383,164 @@ export const Sell = () => {
               </div>
             </div>
 
-            {/* Image Selection / Upload */}
+            {/* Auction specific inputs if auction type selected */}
+            {listingType === 'auction' && (
+              <div
+                style={{
+                  backgroundColor: 'var(--bg-primary)',
+                  padding: '14px',
+                  borderRadius: 'var(--radius-xs)',
+                  border: '1px solid var(--border-color)',
+                  marginBottom: '16px'
+                }}
+              >
+                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent-burgundy)', textTransform: 'uppercase', display: 'block', marginBottom: '10px' }}>
+                  Auction Configuration
+                </span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                      Starting Bid (₹)
+                    </label>
+                    <input
+                      name="startingBid"
+                      type="number"
+                      className="form-input"
+                      value={formData.startingBid}
+                      onChange={handleChange}
+                      placeholder="e.g. 12000"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                      Duration (Hours)
+                    </label>
+                    <input
+                      name="durationHours"
+                      type="number"
+                      className="form-input"
+                      value={formData.durationHours}
+                      onChange={handleChange}
+                      placeholder="e.g. 4"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Multi-Image Gallery Upload Support (5–6 images) */}
             <div className="form-group" style={{ margin: '14px 0 20px' }}>
-              <label className="form-label">Product Photography *</label>
-              
-              {/* Preset Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label className="form-label" style={{ margin: 0 }}>
+                  Product Photography ({formData.images.length}/6 Images) *
+                </label>
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                  Supports up to 6 distinct photos
+                </span>
+              </div>
+
+              {/* Thumbnails of currently attached images */}
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                {formData.images.map((img, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      position: 'relative',
+                      width: '64px',
+                      height: '64px',
+                      borderRadius: 'var(--radius-xs)',
+                      overflow: 'hidden',
+                      border: formData.image === img ? '2px solid var(--accent-burgundy)' : '1px solid var(--border-color)'
+                    }}
+                  >
+                    <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveImage(idx)}
+                      style={{
+                        position: 'absolute',
+                        top: '2px',
+                        right: '2px',
+                        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                        color: '#FFF',
+                        borderRadius: '50%',
+                        width: '18px',
+                        height: '18px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer'
+                      }}
+                      title="Remove image"
+                    >
+                      <Trash2 size={10} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Preset Quick Selectors */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '12px' }}>
                 {imagePresets.map((preset, idx) => (
                   <button
                     key={idx}
                     type="button"
-                    onClick={() => setFormData({ ...formData, image: preset.url })}
+                    onClick={() => {
+                      setFormData((prev) => ({
+                        ...prev,
+                        image: preset.url,
+                        images: prev.images.includes(preset.url) ? prev.images : [...prev.images, preset.url].slice(0, 6)
+                      }));
+                    }}
                     style={{
-                      border: formData.image === preset.url ? '2px solid var(--accent-burgundy)' : '1px solid var(--border-color)',
+                      border: '1px solid var(--border-color)',
                       padding: '4px',
                       borderRadius: 'var(--radius-xs)',
-                      backgroundColor: formData.image === preset.url ? 'var(--surface-secondary)' : '#FFF',
+                      backgroundColor: '#FFF',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
                       gap: '4px'
                     }}
                   >
-                    <img src={preset.url} alt={preset.label} style={{ width: '100%', height: '42px', objectFit: 'cover' }} />
-                    <span style={{ fontSize: '9.5px', color: 'var(--text-secondary)', textAlign: 'center' }}>{preset.label}</span>
+                    <img src={preset.url} alt={preset.label} style={{ width: '100%', height: '38px', objectFit: 'cover' }} />
+                    <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textAlign: 'center' }}>{preset.label}</span>
                   </button>
                 ))}
               </div>
 
-              {/* Upload Input & URL input */}
+              {/* Add custom URL or File */}
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <input
                   type="url"
-                  name="image"
-                  className="form-input"
-                  value={formData.image}
-                  onChange={handleChange}
-                  placeholder="Or paste custom image URL"
-                  style={{ flex: 1 }}
+                  placeholder="Paste additional image URL"
+                  value={newImageUrl}
+                  onChange={(e) => setNewImageUrl(e.target.value)}
+                  style={{
+                    flex: 1,
+                    height: '38px',
+                    padding: '0 10px',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-xs)',
+                    fontSize: '12px',
+                    outline: 'none'
+                  }}
                 />
+                <button
+                  type="button"
+                  onClick={handleAddImage}
+                  className="btn btn-secondary btn-sm"
+                  style={{ height: '38px' }}
+                >
+                  <Plus size={13} />
+                  <span>Add URL</span>
+                </button>
                 <label
                   className="btn btn-secondary btn-sm"
-                  style={{ cursor: 'pointer', height: '44px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  style={{ cursor: 'pointer', height: '38px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
                 >
-                  <Upload size={14} />
-                  <span>Upload File</span>
+                  <Upload size={13} />
+                  <span>Upload</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -425,6 +598,21 @@ export const Sell = () => {
               </div>
             </div>
 
+            <div className="form-group">
+              <label className="form-label" htmlFor="provenance">
+                Provenance & Certification Note
+              </label>
+              <input
+                id="provenance"
+                name="provenance"
+                type="text"
+                className="form-input"
+                value={formData.provenance}
+                onChange={handleChange}
+                placeholder="e.g. Master studio signature seal on bottom plinth"
+              />
+            </div>
+
             {error && <p className="form-error" style={{ marginBottom: '16px' }}>{error}</p>}
 
             <button
@@ -432,7 +620,7 @@ export const Sell = () => {
               className="btn btn-burgundy"
               style={{ width: '100%', height: '48px', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: '12px' }}
             >
-              <span>Publish Object Listing</span>
+              <span>{listingType === 'auction' ? 'Publish Live Auction Lot' : 'Publish Object Listing'}</span>
               <ArrowRight size={15} />
             </button>
           </form>
@@ -467,7 +655,7 @@ export const Sell = () => {
               <div
                 style={{
                   width: '100%',
-                  aspectRatio: '3 / 4',
+                  aspectRatio: '4 / 3',
                   backgroundColor: 'var(--surface-secondary)',
                   overflow: 'hidden',
                   position: 'relative'
@@ -495,6 +683,24 @@ export const Sell = () => {
                 >
                   {formData.category}
                 </span>
+
+                {listingType === 'auction' && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '12px',
+                      right: '12px',
+                      padding: '3px 8px',
+                      backgroundColor: 'rgba(25, 25, 25, 0.85)',
+                      color: '#FFF',
+                      fontSize: '10.5px',
+                      fontWeight: 600,
+                      borderRadius: 'var(--radius-xs)'
+                    }}
+                  >
+                    AUCTION LOT
+                  </span>
+                )}
               </div>
 
               <div style={{ padding: '20px' }}>
@@ -505,7 +711,7 @@ export const Sell = () => {
                   {formData.seller || 'Independent Maker'} • {formData.location || 'Studio'}
                 </p>
                 <div style={{ fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  {formatINR(Number(formData.price) || 0)}
+                  {listingType === 'auction' ? `Starting: ${formatINR(Number(formData.startingBid) || 0)}` : formatINR(Number(formData.price) || 0)}
                 </div>
                 {formData.description && (
                   <p
@@ -528,11 +734,11 @@ export const Sell = () => {
           </div>
         </div>
 
-        {/* Local Demo Listings Review */}
+        {/* Local Listings Review */}
         {customProducts.length > 0 && (
           <div style={{ marginTop: '64px', borderTop: '1px solid var(--border-color)', paddingTop: '36px' }}>
             <h3 style={{ fontSize: '1.4rem', marginBottom: '20px' }}>
-              Your Local Demo Listings ({customProducts.length})
+              Your Atelier Listings ({customProducts.length})
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
               {customProducts.map((item) => (

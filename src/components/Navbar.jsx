@@ -1,33 +1,61 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Search, Heart, ShoppingBag, Menu, X, ArrowRight, User, ShieldCheck } from 'lucide-react';
+import {
+  Search,
+  Heart,
+  ShoppingBag,
+  Calendar,
+  User,
+  Menu,
+  X,
+  ChevronDown,
+  LogOut,
+  Settings,
+  Package,
+  Gavel,
+  Store,
+  Clock
+} from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { useAuth } from '../context/AuthContext';
-import { CATEGORIES } from '../data/products';
 
 export const Navbar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSearchCategory, setSelectedSearchCategory] = useState('all');
-  
+
   const { cartCount } = useCart();
   const { wishlistCount } = useWishlist();
   const { user, signOut } = useAuth();
-  
+
   const navigate = useNavigate();
   const location = useLocation();
+  const dropdownRef = useRef(null);
 
-  // Close mobile menu on route change
+  // Close menus on route change
   useEffect(() => {
     setMobileMenuOpen(false);
+    setProfileDropdownOpen(false);
   }, [location.pathname]);
+
+  // Click outside to close profile dropdown
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setProfileDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Handle escape key
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         setMobileMenuOpen(false);
+        setProfileDropdownOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -37,25 +65,21 @@ export const Navbar = () => {
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     const query = searchQuery.trim();
-    const params = new URLSearchParams();
-    if (query) params.set('search', query);
-    if (selectedSearchCategory && selectedSearchCategory !== 'all') {
-      params.set('category', selectedSearchCategory);
+    if (query) {
+      navigate(`/shop?search=${encodeURIComponent(query)}`);
+    } else {
+      navigate('/shop');
     }
-    navigate(`/explore?${params.toString()}`);
   };
 
-  const navCategories = [
-    { id: 'all', label: 'All Categories', path: '/explore' },
-    { id: 'art-prints', label: 'Art & Prints', path: '/explore?category=art-prints' },
-    { id: 'handmade', label: 'Handmade Ceramics', path: '/explore?category=handmade' },
-    { id: 'home-living', label: 'Home & Living', path: '/explore?category=home-living' },
-    { id: 'fashion', label: 'Fashion & Accessories', path: '/explore?category=fashion' },
-    { id: 'collectibles', label: 'Collectibles', path: '/explore?category=collectibles' },
-    { id: 'vintage', label: 'Vintage Finds', path: '/explore?category=vintage' },
-    { id: 'live-auctions', label: 'Live Auctions', path: '/auctions', isLive: true },
-    { id: 'upcoming-auctions', label: 'Upcoming Lots', path: '/auctions?tab=upcoming' }
-  ];
+  const getInitials = (name) => {
+    if (!name) return 'VY';
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  };
 
   return (
     <>
@@ -64,14 +88,12 @@ export const Navbar = () => {
           position: 'sticky',
           top: 0,
           zIndex: 900,
-          backgroundColor: 'rgba(255, 255, 255, 0.94)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
+          backgroundColor: '#FFFFFF',
           borderBottom: '1px solid var(--border-color)',
-          boxShadow: '0 2px 10px rgba(0, 0, 0, 0.03)'
+          boxShadow: '0 1px 4px rgba(0, 0, 0, 0.02)'
         }}
       >
-        {/* Main Header Bar */}
+        {/* ROW 1: Wordmark, Search, and Primary User Actions */}
         <div
           className="container"
           style={{
@@ -86,8 +108,7 @@ export const Navbar = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
-              aria-expanded={mobileMenuOpen}
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
               className="mobile-nav-toggle"
               style={{
                 display: 'none',
@@ -104,7 +125,7 @@ export const Navbar = () => {
               to="/"
               style={{
                 fontFamily: 'var(--font-serif)',
-                fontSize: '1.9rem',
+                fontSize: '2rem',
                 letterSpacing: '0.22em',
                 fontWeight: 600,
                 color: 'var(--text-primary)',
@@ -117,12 +138,12 @@ export const Navbar = () => {
             </Link>
           </div>
 
-          {/* Center: Prominent Marketplace Search Bar (eBay/Etsy-style) */}
+          {/* Center: Search Bar (Text input + button, no categories dropdown) */}
           <div
             className="header-search-container"
             style={{
-              flex: '1 1 520px',
-              maxWidth: '680px',
+              flex: '1 1 480px',
+              maxWidth: '640px',
               display: 'block'
             }}
           >
@@ -131,7 +152,7 @@ export const Navbar = () => {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                border: '1.5px solid var(--border-color)',
+                border: '1px solid var(--border-color)',
                 borderRadius: 'var(--radius-xs)',
                 backgroundColor: 'var(--bg-primary)',
                 overflow: 'hidden',
@@ -139,46 +160,15 @@ export const Navbar = () => {
               }}
               className="marketplace-search-form"
             >
-              {/* Category Dropdown */}
-              <select
-                value={selectedSearchCategory}
-                onChange={(e) => setSelectedSearchCategory(e.target.value)}
-                aria-label="Filter search by category"
-                className="hide-on-tablet"
-                style={{
-                  height: '42px',
-                  padding: '0 10px',
-                  border: 'none',
-                  borderRight: '1px solid var(--border-color)',
-                  backgroundColor: 'transparent',
-                  fontFamily: 'var(--font-sans)',
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  color: 'var(--text-secondary)',
-                  outline: 'none',
-                  cursor: 'pointer',
-                  maxWidth: '140px'
-                }}
-              >
-                <option value="all">All Categories</option>
-                <option value="art-prints">Art & Prints</option>
-                <option value="handmade">Handmade</option>
-                <option value="home-living">Home & Living</option>
-                <option value="fashion">Fashion</option>
-                <option value="collectibles">Collectibles</option>
-                <option value="vintage">Vintage Finds</option>
-              </select>
-
-              {/* Text Input */}
               <input
                 type="text"
-                placeholder="Search thousands of artisan pieces, ceramics, vintage finds..."
+                placeholder="Search distinctive objects, ceramics, living art, live lots..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
                   flex: 1,
                   height: '42px',
-                  padding: '0 14px',
+                  padding: '0 16px',
                   border: 'none',
                   background: 'transparent',
                   fontFamily: 'var(--font-sans)',
@@ -188,7 +178,6 @@ export const Navbar = () => {
                 }}
               />
 
-              {/* Submit Button */}
               <button
                 type="submit"
                 className="btn-burgundy"
@@ -205,6 +194,7 @@ export const Navbar = () => {
                   letterSpacing: '0.04em',
                   cursor: 'pointer'
                 }}
+                aria-label="Search catalog"
               >
                 <Search size={15} />
                 <span className="hide-on-mobile">Search</span>
@@ -212,44 +202,56 @@ export const Navbar = () => {
             </form>
           </div>
 
-          {/* Right: Marketplace Utility Actions */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(10px, 1.5vw, 20px)', flexShrink: 0 }}>
-            {/* Sell Link */}
+          {/* Right: Controls (Schedule, Watchlist, Bag, Profile) */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'clamp(10px, 1.8vw, 22px)',
+              flexShrink: 0
+            }}
+          >
+            {/* Schedule Link */}
             <Link
-              to="/sell"
+              to="/schedule"
               style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
                 fontSize: 'var(--text-sm)',
-                fontWeight: 600,
-                color: 'var(--accent-burgundy)',
-                whiteSpace: 'nowrap'
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                padding: '6px 8px',
+                transition: 'color 150ms ease'
               }}
-              className="hide-on-mobile"
+              className="hover-burgundy hide-on-mobile"
+              title="Auction Schedule & Reminders"
             >
-              Sell on Veyra
+              <Calendar size={18} strokeWidth={1.75} />
+              <span>Schedule</span>
             </Link>
 
-            <span className="hide-on-mobile" style={{ width: '1px', height: '22px', backgroundColor: 'var(--border-color)' }} />
-
-            {/* Wishlist Link */}
+            {/* Watchlist (Heart) Link */}
             <Link
               to="/wishlist"
-              aria-label={`Wishlist with ${wishlistCount} items`}
+              aria-label={`Watchlist with ${wishlistCount} items`}
               style={{
                 color: 'var(--text-primary)',
                 position: 'relative',
                 display: 'flex',
                 alignItems: 'center',
-                padding: '4px'
+                padding: '6px',
+                transition: 'color 150ms ease'
               }}
-              title="Saved Wishlist"
+              title="Watchlist"
             >
               <Heart size={20} strokeWidth={1.75} />
               {wishlistCount > 0 && (
                 <span
                   style={{
                     position: 'absolute',
-                    top: '-4px',
-                    right: '-4px',
+                    top: '-2px',
+                    right: '-2px',
                     minWidth: '16px',
                     height: '16px',
                     padding: '0 3px',
@@ -268,7 +270,7 @@ export const Navbar = () => {
               )}
             </Link>
 
-            {/* Shopping Bag Link */}
+            {/* Shopping Bag Link with Live Count */}
             <Link
               to="/cart"
               aria-label={`Shopping bag with ${cartCount} items`}
@@ -277,7 +279,8 @@ export const Navbar = () => {
                 position: 'relative',
                 display: 'flex',
                 alignItems: 'center',
-                padding: '4px'
+                padding: '6px',
+                transition: 'color 150ms ease'
               }}
               title="Shopping Bag"
             >
@@ -286,8 +289,8 @@ export const Navbar = () => {
                 <span
                   style={{
                     position: 'absolute',
-                    top: '-4px',
-                    right: '-4px',
+                    top: '-2px',
+                    right: '-2px',
                     minWidth: '16px',
                     height: '16px',
                     padding: '0 3px',
@@ -306,88 +309,356 @@ export const Navbar = () => {
               )}
             </Link>
 
-            {/* User Account / Sign In */}
+            <span style={{ width: '1px', height: '20px', backgroundColor: 'var(--border-color)' }} />
+
+            {/* Profile / Account Control */}
             {user ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span
-                  style={{
-                    fontSize: 'var(--text-xs)',
-                    color: 'var(--text-primary)',
-                    fontWeight: 600
-                  }}
-                  className="hide-on-mobile"
-                >
-                  Hi, {user.name.split(' ')[0]}
-                </span>
+              <div ref={dropdownRef} style={{ position: 'relative' }}>
                 <button
-                  onClick={signOut}
-                  className="btn-subtle"
-                  style={{ height: '32px', fontSize: '11px', padding: '0 8px' }}
+                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                  aria-expanded={profileDropdownOpen}
+                  aria-haspopup="true"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '4px 6px',
+                    borderRadius: 'var(--radius-xs)',
+                    cursor: 'pointer'
+                  }}
+                  className="profile-button-trigger"
                 >
-                  Sign Out
+                  <div
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--accent-burgundy)',
+                      color: '#FFFFFF',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      letterSpacing: '0.04em'
+                    }}
+                  >
+                    {getInitials(user.name)}
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 'var(--text-sm)',
+                      fontWeight: 500,
+                      color: 'var(--text-primary)'
+                    }}
+                    className="hide-on-mobile"
+                  >
+                    {user.name.split(' ')[0]}
+                  </span>
+                  <ChevronDown size={14} color="var(--text-secondary)" />
                 </button>
+
+                {/* Account Dropdown Inspired by Christie's Layout */}
+                {profileDropdownOpen && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 8px)',
+                      right: 0,
+                      width: '260px',
+                      backgroundColor: '#FFFFFF',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-xs)',
+                      boxShadow: '0 12px 32px rgba(0, 0, 0, 0.09)',
+                      zIndex: 1000,
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {/* User Header */}
+                    <div
+                      style={{
+                        padding: '16px 18px',
+                        borderBottom: '1px solid var(--border-color)',
+                        backgroundColor: 'var(--bg-primary)'
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          letterSpacing: '0.08em',
+                          textTransform: 'uppercase',
+                          color: 'var(--accent-burgundy)',
+                          fontWeight: 600,
+                          display: 'block',
+                          marginBottom: '2px'
+                        }}
+                      >
+                        {user.role === 'artisan' || user.role === 'seller' ? 'Maker Atelier' : 'Collector Account'}
+                      </span>
+                      <strong style={{ display: 'block', fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>
+                        {user.name}
+                      </strong>
+                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {user.email}
+                      </span>
+                    </div>
+
+                    {/* Navigation Links */}
+                    <div style={{ padding: '8px 0' }}>
+                      <Link
+                        to="/account"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '10px 18px',
+                          fontSize: 'var(--text-sm)',
+                          color: 'var(--text-primary)'
+                        }}
+                        className="dropdown-item"
+                      >
+                        <User size={16} color="var(--text-secondary)" />
+                        <span>Account & Profile</span>
+                      </Link>
+
+                      <Link
+                        to="/account?tab=orders"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '10px 18px',
+                          fontSize: 'var(--text-sm)',
+                          color: 'var(--text-primary)'
+                        }}
+                        className="dropdown-item"
+                      >
+                        <Package size={16} color="var(--text-secondary)" />
+                        <span>My Orders & History</span>
+                      </Link>
+
+                      <Link
+                        to="/account?tab=bids"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '10px 18px',
+                          fontSize: 'var(--text-sm)',
+                          color: 'var(--text-primary)'
+                        }}
+                        className="dropdown-item"
+                      >
+                        <Gavel size={16} color="var(--text-secondary)" />
+                        <span>My Bids</span>
+                      </Link>
+
+                      <Link
+                        to="/schedule"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '10px 18px',
+                          fontSize: 'var(--text-sm)',
+                          color: 'var(--text-primary)'
+                        }}
+                        className="dropdown-item"
+                      >
+                        <Clock size={16} color="var(--text-secondary)" />
+                        <span>Scheduled Auctions</span>
+                      </Link>
+
+                      <Link
+                        to="/sell"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '10px 18px',
+                          fontSize: 'var(--text-sm)',
+                          color: 'var(--accent-burgundy)',
+                          fontWeight: 500
+                        }}
+                        className="dropdown-item"
+                      >
+                        <Store size={16} color="var(--accent-burgundy)" />
+                        <span>Seller Atelier / List Object</span>
+                      </Link>
+
+                      <Link
+                        to="/account?tab=settings"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '10px 18px',
+                          fontSize: 'var(--text-sm)',
+                          color: 'var(--text-primary)'
+                        }}
+                        className="dropdown-item"
+                      >
+                        <Settings size={16} color="var(--text-secondary)" />
+                        <span>Settings</span>
+                      </Link>
+                    </div>
+
+                    {/* Sign Out */}
+                    <div style={{ borderTop: '1px solid var(--border-color)', padding: '6px 0' }}>
+                      <button
+                        onClick={signOut}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          padding: '10px 18px',
+                          fontSize: 'var(--text-sm)',
+                          color: 'var(--error-color)',
+                          textAlign: 'left',
+                          cursor: 'pointer'
+                        }}
+                        className="dropdown-item"
+                      >
+                        <LogOut size={16} />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <Link
-                to="/signin"
-                className="btn btn-primary btn-sm"
-                style={{ fontSize: 'var(--text-xs)', height: '36px', padding: '0 14px' }}
+                to="/account"
+                aria-label="Account"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  color: 'var(--text-primary)',
+                  padding: '6px'
+                }}
+                title="Profile & Sign In"
               >
-                Sign In
+                <User size={20} strokeWidth={1.75} />
+                <span className="hide-on-mobile" style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>
+                  Account
+                </span>
               </Link>
             )}
           </div>
         </div>
 
-        {/* Category Subnav Strip (eBay / Etsy style) */}
+        {/* ROW 2: SECONDARY NAVIGATION ROW
+            Per specification: Show ONLY these four navigation options:
+            1. All Categories — opens complete shop/category browsing page
+            2. Shop — opens product marketplace
+            3. Live Auctions — opens currently active auctions
+            4. Upcoming Lots — opens scheduled future auctions
+        */}
         <div
           style={{
             borderTop: '1px solid var(--border-color)',
-            backgroundColor: 'var(--bg-primary)',
-            overflowX: 'auto',
-            scrollbarWidth: 'none'
+            backgroundColor: 'var(--bg-primary)'
           }}
-          className="category-subnav"
         >
           <div
             className="container"
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 'clamp(14px, 2vw, 24px)',
-              height: '40px',
-              whiteSpace: 'nowrap'
+              gap: 'clamp(20px, 4vw, 42px)',
+              height: '42px',
+              whiteSpace: 'nowrap',
+              overflowX: 'auto',
+              scrollbarWidth: 'none'
             }}
           >
-            {navCategories.map((item) => (
-              <Link
-                key={item.id}
-                to={item.path}
+            <NavLink
+              to="/categories"
+              className={({ isActive }) =>
+                `subnav-link ${isActive ? 'subnav-link-active' : ''}`
+              }
+              style={{
+                fontSize: '13px',
+                letterSpacing: '0.04em',
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                height: '100%',
+                position: 'relative'
+              }}
+            >
+              All Categories
+            </NavLink>
+
+            <NavLink
+              to="/shop"
+              className={({ isActive }) =>
+                `subnav-link ${isActive ? 'subnav-link-active' : ''}`
+              }
+              style={{
+                fontSize: '13px',
+                letterSpacing: '0.04em',
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                height: '100%',
+                position: 'relative'
+              }}
+            >
+              Shop
+            </NavLink>
+
+            <NavLink
+              to="/live-auctions"
+              className={({ isActive }) =>
+                `subnav-link ${isActive ? 'subnav-link-active' : ''}`
+              }
+              style={{
+                fontSize: '13px',
+                letterSpacing: '0.04em',
+                fontWeight: 600,
+                color: 'var(--accent-burgundy)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                height: '100%',
+                position: 'relative'
+              }}
+            >
+              <span
                 style={{
-                  fontSize: '12.5px',
-                  fontWeight: item.isLive ? 600 : 500,
-                  color: item.isLive ? 'var(--accent-burgundy)' : 'var(--text-secondary)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  transition: 'color 150ms ease'
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--accent-burgundy)',
+                  display: 'inline-block'
                 }}
-                className="subnav-item"
-              >
-                {item.isLive && (
-                  <span
-                    style={{
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '50%',
-                      backgroundColor: 'var(--accent-burgundy)',
-                      display: 'inline-block'
-                    }}
-                  />
-                )}
-                <span>{item.label}</span>
-              </Link>
-            ))}
+              />
+              <span>Live Auctions</span>
+            </NavLink>
+
+            <NavLink
+              to="/upcoming-lots"
+              className={({ isActive }) =>
+                `subnav-link ${isActive ? 'subnav-link-active' : ''}`
+              }
+              style={{
+                fontSize: '13px',
+                letterSpacing: '0.04em',
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                height: '100%',
+                position: 'relative'
+              }}
+            >
+              Upcoming Lots
+            </NavLink>
           </div>
         </div>
       </header>
@@ -436,149 +707,297 @@ export const Navbar = () => {
                   marginBottom: '20px'
                 }}
               >
-                <div>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-serif)',
-                      fontSize: '1.5rem',
-                      letterSpacing: '0.18em',
-                      fontWeight: 600,
-                      display: 'block'
-                    }}
-                  >
-                    VEYRA
-                  </span>
-                  <span style={{ fontSize: '10px', color: 'var(--accent-burgundy)', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 600 }}>
-                    Marketplace & Live Auctions
-                  </span>
-                </div>
+                <Link
+                  to="/"
+                  style={{
+                    fontFamily: 'var(--font-serif)',
+                    fontSize: '1.6rem',
+                    letterSpacing: '0.18em',
+                    fontWeight: 600
+                  }}
+                >
+                  VEYRA
+                </Link>
                 <button
                   onClick={() => setMobileMenuOpen(false)}
-                  aria-label="Close menu"
-                  style={{ padding: '6px' }}
+                  style={{ padding: '6px', color: 'var(--text-secondary)' }}
                 >
                   <X size={20} />
                 </button>
               </div>
 
               {/* Mobile Search */}
-              <form onSubmit={handleSearchSubmit} style={{ marginBottom: '20px' }}>
-                <div style={{ display: 'flex', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xs)' }}>
+              <form onSubmit={handleSearchSubmit} style={{ marginBottom: '24px' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-xs)',
+                    padding: '0 10px',
+                    backgroundColor: 'var(--bg-primary)'
+                  }}
+                >
+                  <Search size={15} color="var(--text-secondary)" />
                   <input
                     type="text"
                     placeholder="Search objects..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     style={{
-                      flex: 1,
-                      height: '38px',
-                      padding: '0 10px',
                       border: 'none',
-                      fontSize: 'var(--text-xs)',
+                      background: 'transparent',
+                      padding: '10px 8px',
+                      fontSize: '13px',
+                      flex: 1,
                       outline: 'none'
                     }}
                   />
-                  <button type="submit" className="btn-burgundy" style={{ padding: '0 12px', border: 'none' }}>
-                    <Search size={14} />
-                  </button>
                 </div>
               </form>
 
-              <nav style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                  Main Navigation
+              {/* Navigation Items */}
+              <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span
+                  style={{
+                    fontSize: '10px',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    color: 'var(--text-secondary)',
+                    fontWeight: 600,
+                    marginBottom: '6px'
+                  }}
+                >
+                  Navigation
                 </span>
-                <NavLink to="/" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', fontWeight: 500 }}>
-                  Home
-                </NavLink>
-                <NavLink to="/explore" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', fontWeight: 500 }}>
-                  Explore All Marketplace
-                </NavLink>
-                <NavLink to="/auctions" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: 'var(--text-sm)', color: 'var(--accent-burgundy)', fontWeight: 600 }}>
-                  🔥 Live Auctions
-                </NavLink>
-                <NavLink to="/auctions?tab=upcoming" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', fontWeight: 500 }}>
-                  Upcoming Scheduled Lots
-                </NavLink>
-                <NavLink to="/sell" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', fontWeight: 500 }}>
-                  Sell on Veyra
-                </NavLink>
-                <NavLink to="/wishlist" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', fontWeight: 500 }}>
-                  Wishlist ({wishlistCount})
-                </NavLink>
-                <NavLink to="/cart" onClick={() => setMobileMenuOpen(false)} style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', fontWeight: 500 }}>
-                  Shopping Bag ({cartCount})
-                </NavLink>
 
-                <div style={{ margin: '10px 0', borderTop: '1px solid var(--border-color)' }} />
-                <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                  Browse by Medium
+                <Link
+                  to="/categories"
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-xs)',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    color: 'var(--text-primary)'
+                  }}
+                  className="mobile-item"
+                >
+                  All Categories
+                </Link>
+
+                <Link
+                  to="/shop"
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-xs)',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    color: 'var(--text-primary)'
+                  }}
+                  className="mobile-item"
+                >
+                  Shop
+                </Link>
+
+                <Link
+                  to="/live-auctions"
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-xs)',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: 'var(--accent-burgundy)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                  className="mobile-item"
+                >
+                  <span
+                    style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--accent-burgundy)'
+                    }}
+                  />
+                  <span>Live Auctions</span>
+                </Link>
+
+                <Link
+                  to="/upcoming-lots"
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-xs)',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    color: 'var(--text-primary)'
+                  }}
+                  className="mobile-item"
+                >
+                  Upcoming Lots
+                </Link>
+
+                <div style={{ height: '1px', backgroundColor: 'var(--border-color)', margin: '14px 0' }} />
+
+                <span
+                  style={{
+                    fontSize: '10px',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    color: 'var(--text-secondary)',
+                    fontWeight: 600,
+                    marginBottom: '6px'
+                  }}
+                >
+                  Collector Tools
                 </span>
-                {CATEGORIES.filter(c => c.id !== 'all').map(c => (
-                  <Link
-                    key={c.id}
-                    to={`/explore?category=${c.id}`}
-                    onClick={() => setMobileMenuOpen(false)}
-                    style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}
-                  >
-                    {c.name}
-                  </Link>
-                ))}
+
+                <Link
+                  to="/schedule"
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-xs)',
+                    fontSize: '14px',
+                    color: 'var(--text-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                  className="mobile-item"
+                >
+                  <Calendar size={16} />
+                  <span>Schedule & Reminders</span>
+                </Link>
+
+                <Link
+                  to="/wishlist"
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-xs)',
+                    fontSize: '14px',
+                    color: 'var(--text-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                  className="mobile-item"
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Heart size={16} />
+                    <span>Watchlist</span>
+                  </span>
+                  {wishlistCount > 0 && <span className="badge-tag">{wishlistCount}</span>}
+                </Link>
+
+                <Link
+                  to="/cart"
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-xs)',
+                    fontSize: '14px',
+                    color: 'var(--text-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                  className="mobile-item"
+                >
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <ShoppingBag size={16} />
+                    <span>Shopping Bag</span>
+                  </span>
+                  {cartCount > 0 && <span className="badge-tag">{cartCount}</span>}
+                </Link>
+
+                <Link
+                  to="/account"
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-xs)',
+                    fontSize: '14px',
+                    color: 'var(--text-primary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                  className="mobile-item"
+                >
+                  <User size={16} />
+                  <span>Account & Profile</span>
+                </Link>
+
+                <Link
+                  to="/sell"
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 'var(--radius-xs)',
+                    fontSize: '14px',
+                    color: 'var(--accent-burgundy)',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                  className="mobile-item"
+                >
+                  <Store size={16} />
+                  <span>Seller Atelier</span>
+                </Link>
               </nav>
             </div>
 
-            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', marginTop: '20px' }}>
+            {/* Bottom Mobile Action */}
+            <div style={{ paddingTop: '20px', borderTop: '1px solid var(--border-color)' }}>
               {user ? (
-                <div>
-                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                    Signed in as <strong>{user.name}</strong>
-                  </p>
-                  <button onClick={signOut} className="btn btn-secondary" style={{ width: '100%', height: '38px', fontSize: 'var(--text-xs)' }}>
-                    Sign Out
-                  </button>
-                </div>
+                <button
+                  onClick={signOut}
+                  className="btn btn-secondary"
+                  style={{ width: '100%', height: '40px', fontSize: '13px' }}
+                >
+                  Sign Out ({user.name.split(' ')[0]})
+                </button>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <Link
-                    to="/signin"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="btn btn-primary"
-                    style={{ width: '100%', height: '38px', fontSize: 'var(--text-xs)' }}
-                  >
-                    Sign In
-                  </Link>
-                  <Link
-                    to="/signup"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="btn btn-secondary"
-                    style={{ width: '100%', height: '38px', fontSize: 'var(--text-xs)' }}
-                  >
-                    Create Account
-                  </Link>
-                </div>
+                <Link
+                  to="/signin"
+                  className="btn btn-burgundy"
+                  style={{ width: '100%', height: '40px', fontSize: '13px' }}
+                >
+                  Sign In to Account
+                </Link>
               )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Responsive styles */}
       <style>{`
-        .marketplace-search-form:focus-within {
-          border-color: var(--accent-burgundy) !important;
-          box-shadow: 0 0 0 2px rgba(120, 59, 75, 0.12);
+        .dropdown-item:hover {
+          background-color: var(--bg-primary);
         }
-        .subnav-item:hover {
-          color: var(--text-primary) !important;
+        .subnav-link {
+          border-bottom: 2px solid transparent;
+          transition: border-color 150ms ease, color 150ms ease;
+        }
+        .subnav-link:hover {
+          color: var(--accent-burgundy) !important;
+        }
+        .subnav-link-active {
+          border-bottom-color: var(--accent-burgundy) !important;
+          color: var(--accent-burgundy) !important;
+        }
+        .mobile-item:hover {
+          background-color: var(--bg-primary);
+        }
+        .hover-burgundy:hover {
+          color: var(--accent-burgundy) !important;
         }
         @media (max-width: 860px) {
-          .hide-on-tablet {
-            display: none !important;
-          }
-        }
-        @media (max-width: 680px) {
           .mobile-nav-toggle {
-            display: inline-flex !important;
+            display: flex !important;
+          }
+          .header-search-container {
+            display: none !important;
           }
           .hide-on-mobile {
             display: none !important;

@@ -32,11 +32,20 @@ export const ProductsProvider = ({ children }) => {
       id: 'custom-' + Date.now(),
       rating: 5.0,
       featured: false,
-      inStock: true
+      inStock: true,
+      condition: productData.condition || 'Studio Mint Original',
+      availability: 'In Stock — Studio Direct',
+      images: productData.images && productData.images.length > 0 
+        ? productData.images 
+        : [productData.image]
     };
     setCustomProducts((prev) => [newProduct, ...prev]);
     addToast(`"${newProduct.name}" listed successfully in the catalog.`);
     return newProduct;
+  };
+
+  const getProductById = (id) => {
+    return allProducts.find((p) => p.id === id || p.auctionId === id || p.upcomingId === id);
   };
 
   return (
@@ -45,7 +54,8 @@ export const ProductsProvider = ({ children }) => {
         products: allProducts,
         categories: CATEGORIES,
         customProducts,
-        addProduct
+        addProduct,
+        getProductById
       }}
     >
       {children}

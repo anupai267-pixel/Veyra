@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Heart, ShoppingBag, Eye, CheckCircle2, Shield } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Heart, ShoppingBag, Eye, CheckCircle2 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import { formatINR } from '../data/products';
@@ -43,25 +44,25 @@ export const ProductCard = ({ product, onQuickView }) => {
           width: '100%',
           aspectRatio: '1 / 1',
           backgroundColor: 'var(--surface-secondary)',
-          overflow: 'hidden',
-          cursor: onQuickView ? 'pointer' : 'default'
+          overflow: 'hidden'
         }}
-        onClick={() => onQuickView && onQuickView(product)}
       >
-        <img
-          src={product.image}
-          alt={product.name}
-          loading="lazy"
-          onLoad={() => setImageLoaded(true)}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            transition: 'transform 0.35s ease, opacity 0.3s ease',
-            transform: isHovered ? 'scale(1.03)' : 'scale(1)',
-            opacity: imageLoaded ? 1 : 0
-          }}
-        />
+        <Link to={`/product/${product.id}`} style={{ display: 'block', width: '100%', height: '100%' }}>
+          <img
+            src={product.image}
+            alt={product.name}
+            loading="lazy"
+            onLoad={() => setImageLoaded(true)}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              transition: 'transform 0.35s ease, opacity 0.3s ease',
+              transform: isHovered ? 'scale(1.03)' : 'scale(1)',
+              opacity: imageLoaded ? 1 : 0
+            }}
+          />
+        </Link>
 
         {/* Category Pill on Image */}
         <span
@@ -70,14 +71,15 @@ export const ProductCard = ({ product, onQuickView }) => {
             top: '10px',
             left: '10px',
             padding: '3px 7px',
-            backgroundColor: 'rgba(248, 247, 244, 0.92)',
+            backgroundColor: 'rgba(248, 247, 244, 0.94)',
             backdropFilter: 'blur(4px)',
             fontSize: '10px',
             fontWeight: 600,
             textTransform: 'uppercase',
             letterSpacing: '0.04em',
             color: 'var(--text-secondary)',
-            borderRadius: 'var(--radius-xs)'
+            borderRadius: 'var(--radius-xs)',
+            pointerEvents: 'none'
           }}
         >
           {product.category}
@@ -98,7 +100,7 @@ export const ProductCard = ({ product, onQuickView }) => {
             width: '32px',
             height: '32px',
             borderRadius: '50%',
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            backgroundColor: 'rgba(255, 255, 255, 0.92)',
             backdropFilter: 'blur(4px)',
             display: 'flex',
             alignItems: 'center',
@@ -106,16 +108,22 @@ export const ProductCard = ({ product, onQuickView }) => {
             color: isFavorited ? 'var(--accent-burgundy)' : 'var(--text-primary)',
             boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
             transition: 'transform 150ms ease',
-            zIndex: 3
+            zIndex: 3,
+            cursor: 'pointer'
           }}
           title={isFavorited ? 'Saved in Wishlist' : 'Add to Wishlist'}
         >
           <Heart size={15} fill={isFavorited ? 'currentColor' : 'none'} strokeWidth={1.75} />
         </button>
 
-        {/* Quick View Hover Pill */}
+        {/* Quick View Button */}
         {onQuickView && (
-          <div
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onQuickView(product);
+            }}
             style={{
               position: 'absolute',
               bottom: '10px',
@@ -131,12 +139,14 @@ export const ProductCard = ({ product, onQuickView }) => {
               gap: '5px',
               opacity: isHovered ? 1 : 0,
               transition: 'opacity 180ms ease',
-              pointerEvents: 'none'
+              cursor: 'pointer',
+              border: 'none',
+              zIndex: 3
             }}
           >
             <Eye size={12} />
             <span>Quick View</span>
-          </div>
+          </button>
         )}
       </div>
 
@@ -161,26 +171,29 @@ export const ProductCard = ({ product, onQuickView }) => {
           </div>
 
           {/* Title */}
-          <h3
-            style={{
-              fontFamily: 'var(--font-serif)',
-              fontSize: '1.15rem',
-              fontWeight: 500,
-              lineHeight: 1.25,
-              color: 'var(--text-primary)',
-              margin: '0 0 8px 0',
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-              minHeight: '2.5em'
-            }}
-            title={product.name}
-          >
-            {product.name}
-          </h3>
+          <Link to={`/product/${product.id}`}>
+            <h3
+              style={{
+                fontFamily: 'var(--font-serif)',
+                fontSize: '1.18rem',
+                fontWeight: 500,
+                lineHeight: 1.25,
+                color: 'var(--text-primary)',
+                margin: '0 0 8px 0',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                minHeight: '2.5em'
+              }}
+              className="hover-burgundy"
+              title={product.name}
+            >
+              {product.name}
+            </h3>
+          </Link>
 
-          {/* Price & Shipping Info */}
+          {/* Price & Delivery */}
           <div style={{ marginBottom: '14px' }}>
             <div
               style={{
@@ -196,56 +209,40 @@ export const ProductCard = ({ product, onQuickView }) => {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
               <span className="badge-shipping">
-                Free Insured Delivery
+                Insured Delivery
               </span>
-              {product.location && (
-                <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                  • {product.location}
-                </span>
-              )}
+              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                {product.condition || 'Studio Original'}
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Direct Action Button */}
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={handleAddToCart}
-            className="btn btn-sm"
-            style={{
-              flex: 1,
-              height: '38px',
-              fontSize: '12px',
-              fontWeight: 600,
-              gap: '6px',
-              borderRadius: 'var(--radius-xs)',
-              backgroundColor: justAdded ? 'var(--success-color)' : 'var(--btn-primary)',
-              color: '#FFFFFF',
-              border: `1px solid ${justAdded ? 'var(--success-color)' : 'var(--btn-primary)'}`,
-              transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
-            }}
-          >
-            {justAdded ? <CheckCircle2 size={14} color="#FFF" /> : <ShoppingBag size={14} />}
-            <span>{justAdded ? 'Added to Bag' : 'Add to Bag'}</span>
-          </button>
-
-          {onQuickView && (
-            <button
-              onClick={() => onQuickView(product)}
-              className="btn btn-secondary btn-sm"
-              style={{
-                width: '38px',
-                height: '38px',
-                padding: 0,
-                borderRadius: 'var(--radius-xs)'
-              }}
-              title="View object specifications"
-              aria-label={`View ${product.name} specifications`}
-            >
-              <Eye size={15} />
-            </button>
+        {/* Action Button */}
+        <button
+          onClick={handleAddToCart}
+          className={`btn ${justAdded ? 'btn-primary' : 'btn-secondary'}`}
+          style={{
+            width: '100%',
+            height: '38px',
+            fontSize: '12px',
+            fontWeight: 600,
+            letterSpacing: '0.04em',
+            gap: '6px'
+          }}
+        >
+          {justAdded ? (
+            <>
+              <CheckCircle2 size={14} color="var(--success-color)" />
+              <span>Added to Bag</span>
+            </>
+          ) : (
+            <>
+              <ShoppingBag size={14} />
+              <span>Add to Bag</span>
+            </>
           )}
-        </div>
+        </button>
       </div>
     </article>
   );

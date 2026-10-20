@@ -3,15 +3,58 @@ import { useToast } from './ToastContext';
 
 const CartContext = createContext(null);
 const CART_STORAGE_KEY = 'veyra_cart_items';
+const ORDERS_STORAGE_KEY = 'veyra_user_orders';
+const RECENTLY_VIEWED_KEY = 'veyra_recently_viewed';
 
 export const CartProvider = ({ children }) => {
   const { addToast } = useToast();
+
   const [items, setItems] = useState(() => {
     try {
       const saved = localStorage.getItem(CART_STORAGE_KEY);
       return saved ? JSON.parse(saved) : [];
     } catch (err) {
       console.warn('Failed to parse cart from localStorage', err);
+      return [];
+    }
+  });
+
+  const [orders, setOrders] = useState(() => {
+    try {
+      const saved = localStorage.getItem(ORDERS_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : [
+        // Seed an initial order for authentic collector feel
+        {
+          id: 'VY-749102',
+          date: '14 Oct 2026',
+          items: [
+            {
+              id: 'prod-1',
+              name: 'Ochre Raku Fluted Vessel',
+              price: 18500,
+              quantity: 1,
+              seller: 'Studio Vayu',
+              image: 'https://images.unsplash.com/photo-1612196808214-b8e1d6145a8c?auto=format&fit=crop&w=600&q=80'
+            }
+          ],
+          subtotal: 18500,
+          shipping: 0,
+          total: 18500,
+          status: 'Delivered',
+          trackingNumber: 'VY-IN-9812499',
+          carrier: 'Veyra White-Glove Insured Logistics'
+        }
+      ];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [recentlyViewed, setRecentlyViewed] = useState(() => {
+    try {
+      const saved = localStorage.getItem(RECENTLY_VIEWED_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
       return [];
     }
   });
@@ -23,6 +66,22 @@ export const CartProvider = ({ children }) => {
       console.warn('Failed to save cart to localStorage', err);
     }
   }, [items]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ORDERS_STORAGE_KEY, JSON.stringify(orders));
+    } catch (err) {
+      console.warn('Failed to save orders to localStorage', err);
+    }
+  }, [orders]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(RECENTLY_VIEWED_KEY, JSON.stringify(recentlyViewed));
+    } catch (err) {
+      console.warn('Failed to save recently viewed to localStorage', err);
+    }
+  }, [recentlyViewed]);
 
   const addToCart = (product, quantity = 1) => {
     setItems((prevItems) => {
@@ -63,6 +122,31 @@ export const CartProvider = ({ children }) => {
     setItems([]);
   };
 
+  // Place a completed order
+  const createOrder = (orderData) => {
+    const newOrder = {
+      id: 'VY-' + Math.floor(100000 + Math.random() * 900000),
+      date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+      status: 'Confirmed',
+      carrier: 'Veyra White-Glove Insured Transport',
+      trackingNumber: 'VY-IN-' + Math.floor(1000000 + Math.random() * 9000000),
+      ...orderData
+    };
+
+    setOrders((prev) => [newOrder, ...prev]);
+    clearCart();
+    return newOrder;
+  };
+
+  // Record a viewed product
+  const recordRecentlyViewed = (product) => {
+    if (!product || !product.id) return;
+    setRecentlyViewed((prev) => {
+      const filtered = prev.filter((p) => p.id !== product.id);
+      return [product, ...filtered].slice(0, 10);
+    });
+  };
+
   const cartCount = items.reduce((total, item) => total + item.quantity, 0);
   const cartSubtotal = items.reduce(
     (total, item) => total + item.product.price * item.quantity,
@@ -78,7 +162,11 @@ export const CartProvider = ({ children }) => {
         updateQuantity,
         clearCart,
         cartCount,
-        cartSubtotal
+        cartSubtotal,
+        orders,
+        createOrder,
+        recentlyViewed,
+        recordRecentlyViewed
       }}
     >
       {children}

@@ -7,14 +7,19 @@ import { CartProvider } from './context/CartContext';
 import { WishlistProvider } from './context/WishlistContext';
 import { AuctionProvider } from './context/AuctionContext';
 
-import { AnnouncementBar } from './components/AnnouncementBar';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { ToastContainer } from './components/ToastContainer';
 
 import { Home } from './pages/Home';
-import { Explore } from './pages/Explore';
-import { Auctions } from './pages/Auctions';
+import { Shop } from './pages/Shop';
+import { Categories } from './pages/Categories';
+import { LiveAuctions } from './pages/LiveAuctions';
+import { UpcomingLots } from './pages/UpcomingLots';
+import { LiveAuctionRoom } from './pages/LiveAuctionRoom';
+import { ProductDetails } from './pages/ProductDetails';
+import { Schedule } from './pages/Schedule';
+import { Account } from './pages/Account';
 import { Wishlist } from './pages/Wishlist';
 import { Cart } from './pages/Cart';
 import { SignIn } from './pages/SignIn';
@@ -39,15 +44,26 @@ export const App = () => {
             <WishlistProvider>
               <AuctionProvider>
                 <ScrollToTop />
-                <AnnouncementBar />
+                {/* Announcement bar removed per specification */}
                 <Navbar />
                 <main>
                   <Routes>
                     <Route path="/" element={<Home />} />
-                    <Route path="/explore" element={<Explore />} />
-                    <Route path="/auctions" element={<Auctions />} />
+                    <Route path="/shop" element={<Shop />} />
+                    <Route path="/explore" element={<Shop />} />
+                    <Route path="/categories" element={<Categories />} />
+                    <Route path="/live-auctions" element={<LiveAuctions />} />
+                    <Route path="/auctions" element={<LiveAuctions />} />
+                    <Route path="/upcoming-lots" element={<UpcomingLots />} />
+                    <Route path="/live/:id" element={<LiveAuctionRoom />} />
+                    <Route path="/auction/:id" element={<LiveAuctionRoom />} />
+                    <Route path="/product/:id" element={<ProductDetails />} />
+                    <Route path="/schedule" element={<Schedule />} />
+                    <Route path="/account" element={<Account />} />
+                    <Route path="/profile" element={<Account />} />
                     <Route path="/wishlist" element={<Wishlist />} />
                     <Route path="/cart" element={<Cart />} />
+                    {/* Login and Registration pages kept EXACTLY as they are visually */}
                     <Route path="/signin" element={<SignIn />} />
                     <Route path="/signup" element={<SignUp />} />
                     <Route path="/sell" element={<Sell />} />
