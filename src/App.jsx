@@ -50,79 +50,46 @@ export const App = () => {
           <CartProvider>
             <WishlistProvider>
               <AuctionProvider>
-<<<<<<< HEAD
-                <ScrollToTop />
-                {/* Announcement bar removed per specification */}
-                <Navbar />
-                <main>
-                  <Routes>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/shop" element={<Shop />} />
-                    <Route path="/explore" element={<Shop />} />
-                    <Route path="/categories" element={<Categories />} />
-                    <Route path="/live-auctions" element={<LiveAuctions />} />
-                    <Route path="/auctions" element={<LiveAuctions />} />
-                    <Route path="/upcoming-lots" element={<UpcomingLots />} />
-                    <Route path="/live/:id" element={<LiveAuctionRoom />} />
-                    <Route path="/auction/:id" element={<LiveAuctionRoom />} />
-                    <Route path="/product/:id" element={<ProductDetails />} />
-                    <Route path="/schedule" element={<Schedule />} />
-                    <Route path="/account" element={<Account />} />
-                    <Route path="/profile" element={<Account />} />
-                    <Route path="/wishlist" element={<Wishlist />} />
-                    <Route path="/cart" element={<Cart />} />
-                    {/* Login and Registration pages kept EXACTLY as they are visually */}
-                    <Route path="/signin" element={<SignIn />} />
-                    <Route path="/signup" element={<SignUp />} />
-                    <Route path="/forgot-password" element={<ForgotPassword />} />
-                    <Route path="/reset-password" element={<ResetPassword />} />
-                    <Route path="/sell" element={<Sell />} />
-                    {/* Fallback */}
-                    <Route path="*" element={<Home />} />
-                  </Routes>
-                </main>
-                <Footer />
-                <ToastContainer />
-=======
                 <FollowProvider>
-                <ReviewsProvider>
-                  <SellerProfileProvider>
-                  <ScrollToTop />
-                  {/* Announcement bar removed per specification */}
-                  <Navbar />
-                  <main>
-                    <Routes>
-                      <Route path="/" element={<Home />} />
-                      <Route path="/shop" element={<Shop />} />
-                      <Route path="/explore" element={<Shop />} />
-                      <Route path="/categories" element={<Categories />} />
-                      <Route path="/live-auctions" element={<LiveAuctions />} />
-                      <Route path="/auctions" element={<LiveAuctions />} />
-                      <Route path="/upcoming-lots" element={<UpcomingLots />} />
-                      <Route path="/live/:id" element={<LiveAuctionRoom />} />
-                      <Route path="/auction/:id" element={<LiveAuctionRoom />} />
-                      <Route path="/product/:id" element={<ProductDetails />} />
-                      <Route path="/seller/:sellerId" element={<SellerShop />} />
-                      <Route path="/schedule" element={<Schedule />} />
-                      <Route path="/account" element={<Account />} />
-                      <Route path="/profile" element={<Account />} />
-                      <Route path="/wishlist" element={<Wishlist />} />
-                      <Route path="/cart" element={<Cart />} />
-                      {/* Login and Registration pages kept EXACTLY as they are visually */}
-                      <Route path="/signin" element={<SignIn />} />
-                      <Route path="/signup" element={<SignUp />} />
-                      <Route path="/sell" element={<Sell />} />
-                      <Route path="/my-products" element={<MyProducts />} />
-                      {/* Fallback */}
-                      <Route path="*" element={<Home />} />
-                    </Routes>
-                  </main>
-                  <Footer />
-                  <ToastContainer />
-                  </SellerProfileProvider>
-                </ReviewsProvider>
+                  <ReviewsProvider>
+                    <SellerProfileProvider>
+                      <ScrollToTop />
+                      {/* Announcement bar removed per specification */}
+                      <Navbar />
+                      <main>
+                        <Routes>
+                          <Route path="/" element={<Home />} />
+                          <Route path="/shop" element={<Shop />} />
+                          <Route path="/explore" element={<Shop />} />
+                          <Route path="/categories" element={<Categories />} />
+                          <Route path="/live-auctions" element={<LiveAuctions />} />
+                          <Route path="/auctions" element={<LiveAuctions />} />
+                          <Route path="/upcoming-lots" element={<UpcomingLots />} />
+                          <Route path="/live/:id" element={<LiveAuctionRoom />} />
+                          <Route path="/auction/:id" element={<LiveAuctionRoom />} />
+                          <Route path="/product/:id" element={<ProductDetails />} />
+                          <Route path="/seller/:sellerId" element={<SellerShop />} />
+                          <Route path="/schedule" element={<Schedule />} />
+                          <Route path="/account" element={<Account />} />
+                          <Route path="/profile" element={<Account />} />
+                          <Route path="/wishlist" element={<Wishlist />} />
+                          <Route path="/cart" element={<Cart />} />
+                          {/* Login and Registration pages kept EXACTLY as they are visually */}
+                          <Route path="/signin" element={<SignIn />} />
+                          <Route path="/signup" element={<SignUp />} />
+                          <Route path="/forgot-password" element={<ForgotPassword />} />
+                          <Route path="/reset-password" element={<ResetPassword />} />
+                          <Route path="/sell" element={<Sell />} />
+                          <Route path="/my-products" element={<MyProducts />} />
+                          {/* Fallback */}
+                          <Route path="*" element={<Home />} />
+                        </Routes>
+                      </main>
+                      <Footer />
+                      <ToastContainer />
+                    </SellerProfileProvider>
+                  </ReviewsProvider>
                 </FollowProvider>
->>>>>>> origin/main
               </AuctionProvider>
             </WishlistProvider>
           </CartProvider>
