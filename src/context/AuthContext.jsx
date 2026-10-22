@@ -26,7 +26,8 @@ export const AuthProvider = ({ children }) => {
       email: supabaseUser.email,
       name: formattedName,
       username: metadata.username || nameFromEmail.toLowerCase(),
-      phone: metadata.phone || supabaseUser.phone || '+91 98201 44820',
+      phone: metadata.phone || supabaseUser.phone || null,
+      phone_verified: metadata.phone_verified === true || false,
       role: metadata.role || 'collector',
       studio: metadata.studio || null,
       isSupabase: true
@@ -133,13 +134,17 @@ export const AuthProvider = ({ children }) => {
     // Demo fallback when Supabase keys are not yet configured in .env.local
     const nameFromEmail = email.split('@')[0];
     const formattedName = nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
+    const savedDemo = localStorage.getItem(DEMO_USER_STORAGE_KEY);
+    let existingData = {};
+    try { existingData = savedDemo ? JSON.parse(savedDemo) : {}; } catch(e) {}
     const demoUser = {
-      id: 'demo-' + Date.now(),
+      id: existingData.id || 'demo-' + Date.now(),
       name: formattedName,
       username: nameFromEmail.toLowerCase(),
-      phone: '+91 98201 44820',
+      phone: existingData.phone || null,
+      phone_verified: existingData.phone_verified || false,
       email,
-      role: 'collector',
+      role: existingData.role || 'collector',
       isSupabase: false
     };
     setUser(demoUser);
@@ -166,7 +171,8 @@ export const AuthProvider = ({ children }) => {
           data: {
             full_name: name.trim(),
             username: email.split('@')[0].toLowerCase(),
-            phone: '+91 98201 44820',
+            phone: null,
+            phone_verified: false,
             role: role || 'collector'
           }
         }
@@ -199,7 +205,8 @@ export const AuthProvider = ({ children }) => {
       id: 'demo-' + Date.now(),
       name,
       username: email.split('@')[0].toLowerCase(),
-      phone: '+91 98201 44820',
+      phone: null,
+      phone_verified: false,
       email,
       role: role || 'collector',
       isSupabase: false
@@ -251,7 +258,8 @@ export const AuthProvider = ({ children }) => {
           data: {
             full_name: updates.name || user?.name,
             username: updates.username || user?.username,
-            phone: updates.phone || user?.phone,
+            phone: updates.phone !== undefined ? updates.phone : user?.phone,
+            phone_verified: updates.phone_verified !== undefined ? updates.phone_verified : user?.phone_verified,
             studio: updates.studio || user?.studio
           }
         });
@@ -263,6 +271,32 @@ export const AuthProvider = ({ children }) => {
     }
 
     addToast('Account details updated successfully.');
+    return { success: true };
+  };
+
+  // Save verified phone number (called after successful OTP verification)
+  const updatePhoneVerification = async (phone, verified) => {
+    const updated = { ...user, phone, phone_verified: verified };
+    setUser(updated);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.auth.updateUser({
+          data: {
+            full_name: user?.name,
+            username: user?.username,
+            phone,
+            phone_verified: verified,
+            studio: user?.studio
+          }
+        });
+      } catch (err) {
+        console.warn('Error saving phone verification to Supabase:', err);
+      }
+    } else {
+      localStorage.setItem(DEMO_USER_STORAGE_KEY, JSON.stringify(updated));
+    }
+
     return { success: true };
   };
 
@@ -287,6 +321,7 @@ export const AuthProvider = ({ children }) => {
         signUp,
         signInWithGoogle,
         updateProfile,
+        updatePhoneVerification,
         signOut,
         isAuthenticated: !!user,
         isSupabaseConfigured

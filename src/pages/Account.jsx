@@ -26,6 +26,7 @@ import { useWishlist } from '../context/WishlistContext';
 import { useAuctions } from '../context/AuctionContext';
 import { useProducts } from '../context/ProductsContext';
 import { formatINR } from '../data/products';
+import { PhoneVerification } from '../components/PhoneVerification';
 
 export const Account = () => {
   const { user, signOut, updateProfile } = useAuth();
@@ -45,7 +46,6 @@ export const Account = () => {
     name: user?.name || 'Collector',
     username: user?.username || 'collector_user',
     email: user?.email || '',
-    phone: user?.phone || '+91 98201 44820',
     studio: user?.studio || ''
   });
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -62,7 +62,6 @@ export const Account = () => {
         name: user.name || '',
         username: user.username || (user.email ? user.email.split('@')[0] : 'collector_user'),
         email: user.email || '',
-        phone: user.phone || '+91 98201 44820',
         studio: user.studio || ''
       });
     }
@@ -79,7 +78,6 @@ export const Account = () => {
     await updateProfile({
       name: formData.name,
       username: formData.username,
-      phone: formData.phone,
       studio: formData.studio
     });
     setSavedSuccess(true);
@@ -209,19 +207,43 @@ export const Account = () => {
                 </span>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                <span>@{user.username || user.email?.split('@')[0]}</span>
-                <span style={{ opacity: 0.3 }}>•</span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  <Mail size={13} />
-                  {user.email}
-                </span>
-                <span style={{ opacity: 0.3 }}>•</span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  <Phone size={13} />
-                  {user.phone || '+91 98201 44820'}
-                </span>
-              </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  <span>@{user.username || user.email?.split('@')[0]}</span>
+                  <span style={{ opacity: 0.3 }}>•</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <Mail size={13} />
+                    {user.email}
+                  </span>
+                  {user.phone && (
+                    <>
+                      <span style={{ opacity: 0.3 }}>•</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Phone size={13} />
+                        {user.phone}
+                        {user.phone_verified && (
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '3px',
+                              fontSize: '10px',
+                              fontWeight: 700,
+                              letterSpacing: '0.04em',
+                              color: 'var(--success-color)',
+                              backgroundColor: 'var(--badge-shipping-bg)',
+                              padding: '1px 6px',
+                              borderRadius: '10px',
+                              textTransform: 'uppercase'
+                            }}
+                          >
+                            <CheckCircle2 size={10} />
+                            Verified
+                          </span>
+                        )}
+                      </span>
+                    </>
+                  )}
+                </div>
             </div>
           </div>
 
@@ -876,26 +898,7 @@ export const Account = () => {
                     </span>
                   </div>
 
-                  {/* Phone Number */}
-                  <div className="form-group">
-                    <label className="form-label" htmlFor="phone">
-                      Contact Phone Number *
-                    </label>
-                    <input
-                      id="phone"
-                      type="tel"
-                      className="form-input"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder="+91 98201 44820"
-                      required
-                    />
-                    <span style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                      Required for courier white-glove transport verification and auction notifications.
-                    </span>
-                  </div>
-
-                  {/* Studio / Maker Designation */}
+                {/* Studio / Maker Designation */}
                   <div className="form-group">
                     <label className="form-label" htmlFor="studio">
                       Artisan Workshop / Atelier Studio (Optional)
@@ -917,6 +920,9 @@ export const Account = () => {
                     </button>
                   </div>
                 </form>
+
+                {/* Phone Number Verification Section */}
+                <PhoneVerification />
               </div>
             )}
           </div>
