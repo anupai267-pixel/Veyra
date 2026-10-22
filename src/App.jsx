@@ -7,6 +7,7 @@ import { CartProvider } from './context/CartContext';
 import { WishlistProvider } from './context/WishlistContext';
 import { AuctionProvider } from './context/AuctionContext';
 import { ReviewsProvider } from './context/ReviewsContext';
+import { FollowProvider } from './context/FollowContext';
 
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
@@ -27,6 +28,7 @@ import { SignIn } from './pages/SignIn';
 import { SignUp } from './pages/SignUp';
 import { Sell } from './pages/Sell';
 import { SellerShop } from './pages/SellerShop';
+import { MyProducts } from './pages/MyProducts';
 
 // Scroll to top helper on route change
 const ScrollToTop = () => {
@@ -45,6 +47,7 @@ export const App = () => {
           <CartProvider>
             <WishlistProvider>
               <AuctionProvider>
+                <FollowProvider>
                 <ReviewsProvider>
                   <ScrollToTop />
                   {/* Announcement bar removed per specification */}
@@ -71,6 +74,7 @@ export const App = () => {
                       <Route path="/signin" element={<SignIn />} />
                       <Route path="/signup" element={<SignUp />} />
                       <Route path="/sell" element={<Sell />} />
+                      <Route path="/my-products" element={<MyProducts />} />
                       {/* Fallback */}
                       <Route path="*" element={<Home />} />
                     </Routes>
@@ -78,6 +82,7 @@ export const App = () => {
                   <Footer />
                   <ToastContainer />
                 </ReviewsProvider>
+                </FollowProvider>
               </AuctionProvider>
             </WishlistProvider>
           </CartProvider>

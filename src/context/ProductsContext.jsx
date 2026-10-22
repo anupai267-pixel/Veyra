@@ -34,9 +34,11 @@ export const ProductsProvider = ({ children }) => {
       featured: false,
       inStock: true,
       condition: productData.condition || 'Studio Mint Original',
-      availability: 'In Stock â€” Studio Direct',
-      images: productData.images && productData.images.length > 0 
-        ? productData.images 
+      availability: 'In Stock — Studio Direct',
+      listingStatus: 'pending',
+      listedAt: new Date().toISOString(),
+      images: productData.images && productData.images.length > 0
+        ? productData.images
         : [productData.image]
     };
     setCustomProducts((prev) => [newProduct, ...prev]);
@@ -48,6 +50,19 @@ export const ProductsProvider = ({ children }) => {
     return allProducts.find((p) => p.id === id || p.auctionId === id || p.upcomingId === id);
   };
 
+  // Get all products listed by a specific user (by user.id as sellerId)
+  const getMyProducts = (userId) => {
+    if (!userId) return [];
+    return customProducts.filter(p => p.sellerId === userId);
+  };
+
+  // Update the listing status of a custom product
+  const updateProductStatus = (productId, status) => {
+    setCustomProducts(prev =>
+      prev.map(p => p.id === productId ? { ...p, listingStatus: status } : p)
+    );
+  };
+
   return (
     <ProductsContext.Provider
       value={{
@@ -55,7 +70,9 @@ export const ProductsProvider = ({ children }) => {
         categories: CATEGORIES,
         customProducts,
         addProduct,
-        getProductById
+        getProductById,
+        getMyProducts,
+        updateProductStatus
       }}
     >
       {children}

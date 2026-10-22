@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Store,
   MapPin,
@@ -9,10 +9,14 @@ import {
   ChevronRight,
   Package,
   MessageSquare,
-  FileText
+  FileText,
+  UserPlus,
+  UserCheck
 } from 'lucide-react';
 import { useProducts } from '../context/ProductsContext';
 import { useReviews } from '../context/ReviewsContext';
+import { useFollow } from '../context/FollowContext';
+import { useAuth } from '../context/AuthContext';
 import { getSellerById } from '../data/sellers';
 import { ProductCard } from '../components/ProductCard';
 import { SellerReviews } from '../components/SellerReviews';
@@ -35,6 +39,10 @@ export const SellerShop = () => {
       p.inStock !== false
     );
   }, [products, sellerId, seller]);
+
+  const { isFollowing, toggleFollow } = useFollow();
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   const ratingData = getSellerRating(sellerId);
 
@@ -120,11 +128,12 @@ export const SellerShop = () => {
 
           {/* Seller Info */}
           <div style={{ flex: 1, minWidth: '240px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
+            {/* Row 1: Name + Verified Badge + Follow Button */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
               <h1
                 style={{
                   fontFamily: 'var(--font-serif)',
-                  fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
+                  fontSize: 'clamp(1.4rem, 2.5vw, 2rem)',
                   lineHeight: 1.2,
                   margin: 0
                 }}
@@ -150,8 +159,58 @@ export const SellerShop = () => {
                   Verified Seller
                 </span>
               )}
+              {/* Follow Button — pushed to the right */}
+              <button
+                onClick={() => {
+                  if (!user) { navigate('/signin'); return; }
+                  toggleFollow(sellerId, seller.name);
+                }}
+                style={{
+                  marginLeft: 'auto',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '7px',
+                  padding: '7px 18px',
+                  borderRadius: 'var(--radius-xs)',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 150ms ease',
+                  border: isFollowing(sellerId) ? '1.5px solid var(--border-color)' : '1.5px solid var(--accent-burgundy)',
+                  backgroundColor: isFollowing(sellerId) ? 'transparent' : 'var(--accent-burgundy)',
+                  color: isFollowing(sellerId) ? 'var(--text-primary)' : '#FFFFFF',
+                  flexShrink: 0
+                }}
+              >
+                {isFollowing(sellerId)
+                  ? <><UserCheck size={14} /><span>Following</span></>
+                  : <><UserPlus size={14} /><span>Follow</span></>
+                }
+              </button>
             </div>
 
+            {/* Row 2: Star Rating (shown when reviews exist) */}
+            {ratingData.count > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '10px' }}>
+                {[1, 2, 3, 4, 5].map(star => (
+                  <Star
+                    key={star}
+                    size={14}
+                    fill={star <= Math.round(ratingData.average) ? 'var(--accent-burgundy)' : 'none'}
+                    color={star <= Math.round(ratingData.average) ? 'var(--accent-burgundy)' : 'var(--border-color)'}
+                    strokeWidth={1.5}
+                  />
+                ))}
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginLeft: '3px' }}>
+                  {ratingData.average}
+                </span>
+                <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  · {ratingData.count} review{ratingData.count !== 1 ? 's' : ''}
+                </span>
+              </div>
+            )}
+
+            {/* Row 3: Description */}
             <p style={{
               fontSize: 'var(--text-sm)',
               color: 'var(--text-secondary)',
@@ -162,7 +221,7 @@ export const SellerShop = () => {
               {seller.description}
             </p>
 
-            {/* Seller Meta Info */}
+            {/* Row 4: Meta Info */}
             <div style={{
               display: 'flex',
               alignItems: 'center',
@@ -177,22 +236,12 @@ export const SellerShop = () => {
                   {seller.location}
                 </span>
               )}
-
               {seller.memberSince && (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                   <Calendar size={13} />
                   Member since {seller.memberSince}
                 </span>
               )}
-
-              {ratingData.count > 0 && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  <Star size={13} fill="var(--accent-burgundy)" color="var(--accent-burgundy)" />
-                  <strong style={{ color: 'var(--text-primary)' }}>{ratingData.average}</strong>
-                  <span>({ratingData.count} review{ratingData.count !== 1 ? 's' : ''})</span>
-                </span>
-              )}
-
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                 <Package size={13} />
                 {sellerProducts.length} item{sellerProducts.length !== 1 ? 's' : ''}
