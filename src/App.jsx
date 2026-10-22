@@ -24,6 +24,8 @@ import { Wishlist } from './pages/Wishlist';
 import { Cart } from './pages/Cart';
 import { SignIn } from './pages/SignIn';
 import { SignUp } from './pages/SignUp';
+import { ForgotPassword } from './pages/ForgotPassword';
+import { ResetPassword } from './pages/ResetPassword';
 import { Sell } from './pages/Sell';
 
 // Scroll to top helper on route change
@@ -66,6 +68,8 @@ export const App = () => {
                     {/* Login and Registration pages kept EXACTLY as they are visually */}
                     <Route path="/signin" element={<SignIn />} />
                     <Route path="/signup" element={<SignUp />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/sell" element={<Sell />} />
                     {/* Fallback */}
                     <Route path="*" element={<Home />} />

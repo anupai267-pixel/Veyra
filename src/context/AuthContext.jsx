@@ -5,6 +5,7 @@ import { useToast } from './ToastContext';
 const AuthContext = createContext(null);
 const DEMO_USER_STORAGE_KEY = 'veyra_active_user';
 const USERS_STORAGE_KEY = 'veyra_users_db';
+const RESET_TOKENS_STORAGE_KEY = 'veyra_password_reset_tokens';
 
 // Helper to access persistent registered users database
 const getRegisteredUsers = () => {
@@ -25,11 +26,31 @@ const saveRegisteredUsers = (usersMap) => {
   }
 };
 
+// Helper for local password reset tokens
+const getResetTokens = () => {
+  try {
+    const raw = localStorage.getItem(RESET_TOKENS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (err) {
+    console.warn('Failed to parse reset tokens:', err);
+    return {};
+  }
+};
+
+const saveResetTokens = (tokensMap) => {
+  try {
+    localStorage.setItem(RESET_TOKENS_STORAGE_KEY, JSON.stringify(tokensMap));
+  } catch (err) {
+    console.warn('Failed to save reset tokens:', err);
+  }
+};
+
 export const AuthProvider = ({ children }) => {
   const { addToast } = useToast();
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
 
   // Helper to extract a friendly user object from Supabase user or session
   const mapSupabaseUser = (supabaseUser) => {
@@ -101,12 +122,15 @@ export const AuthProvider = ({ children }) => {
         setLoading(false);
       });
 
-      // 2. Listen to live Supabase auth state changes (login, logout, token refresh)
+      // 2. Listen to live Supabase auth state changes (login, logout, token refresh, password recovery)
       const {
         data: { subscription }
-      } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+      } = supabase.auth.onAuthStateChange((event, currentSession) => {
         if (!mounted) return;
         setSession(currentSession);
+        if (event === 'PASSWORD_RECOVERY') {
+          setIsPasswordRecovery(true);
+        }
         if (currentSession?.user) {
           setUser(mapSupabaseUser(currentSession.user));
           localStorage.removeItem(DEMO_USER_STORAGE_KEY);
@@ -473,15 +497,144 @@ export const AuthProvider = ({ children }) => {
     addToast('Signed out successfully.');
   };
 
+  // Request password reset email
+  const sendPasswordResetEmail = async (email) => {
+    if (!email || !email.trim()) {
+      return { success: false, error: 'Please enter your registered email address.' };
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      return { success: false, error: 'Please enter a valid email address.' };
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const redirectTo = `${window.location.origin}/reset-password`;
+        const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+          redirectTo
+        });
+        if (error) {
+          console.warn('Supabase resetPasswordForEmail error:', error);
+          return { success: false, error: error.message };
+        }
+        return {
+          success: true,
+          message:
+            'If an account exists with this email address, password reset instructions have been sent. Please check your inbox and spam folder.'
+        };
+      } catch (err) {
+        return { success: false, error: err.message || 'Failed to send password reset email.' };
+      }
+    }
+
+    // Local / offline database token flow
+    const token = 'rst_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
+    const expiresAt = Date.now() + 1000 * 60 * 60; // 1 hour expiry
+
+    const tokens = getResetTokens();
+    tokens[token] = {
+      email: normalizedEmail,
+      expiresAt,
+      used: false,
+      createdAt: new Date().toISOString()
+    };
+    saveResetTokens(tokens);
+
+    const resetLink = `${window.location.origin}/reset-password?token=${token}`;
+    return {
+      success: true,
+      message:
+        'If an account exists with this email address, password reset instructions have been sent. Please check your inbox and spam folder.',
+      resetLink
+    };
+  };
+
+  // Verify reset token validity (for local token flow)
+  const verifyResetToken = (token) => {
+    if (!token) return { valid: false, error: 'Missing or invalid password reset token.' };
+    const tokens = getResetTokens();
+    const record = tokens[token];
+    if (!record) {
+      return { valid: false, error: 'Invalid or unrecognized password reset token.' };
+    }
+    if (record.used) {
+      return { valid: false, error: 'This password reset link has already been used.' };
+    }
+    if (Date.now() > record.expiresAt) {
+      return { valid: false, error: 'This password reset link has expired. Please request a new one.' };
+    }
+    return { valid: true, email: record.email };
+  };
+
+  // Reset / update password
+  const resetPassword = async (newPassword, token) => {
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, error: 'Password must contain at least 6 characters.' };
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { error } = await supabase.auth.updateUser({
+          password: newPassword
+        });
+        if (error) {
+          return { success: false, error: error.message };
+        }
+        setIsPasswordRecovery(false);
+        addToast('Your password has been successfully reset.');
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: err.message || 'Failed to update password.' };
+      }
+    }
+
+    // Local flow
+    let targetEmail = '';
+    if (token) {
+      const tokenVerification = verifyResetToken(token);
+      if (!tokenVerification.valid) {
+        return { success: false, error: tokenVerification.error };
+      }
+      targetEmail = tokenVerification.email;
+
+      const tokens = getResetTokens();
+      if (tokens[token]) {
+        tokens[token].used = true;
+        saveResetTokens(tokens);
+      }
+    } else if (user?.email) {
+      targetEmail = user.email;
+    } else {
+      return { success: false, error: 'No active reset session or token provided.' };
+    }
+
+    if (targetEmail) {
+      const usersDb = getRegisteredUsers();
+      const normEmail = targetEmail.toLowerCase().trim();
+      if (usersDb[normEmail]) {
+        usersDb[normEmail].password = newPassword;
+        saveRegisteredUsers(usersDb);
+      }
+    }
+
+    addToast('Your password has been successfully reset.');
+    return { success: true };
+  };
+
   return (
     <AuthContext.Provider
       value={{
         user,
         session,
         loading,
+        isPasswordRecovery,
         signIn,
         signUp,
         signInWithGoogle,
+        sendPasswordResetEmail,
+        verifyResetToken,
+        resetPassword,
         updateProfile,
         signOut,
         isAuthenticated: !!user,

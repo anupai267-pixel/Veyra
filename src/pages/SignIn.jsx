@@ -122,16 +122,12 @@ export const SignIn = () => {
               <label className="form-label" htmlFor="password-input">
                 Password
               </label>
-              <a
-                href="#forgot"
-                onClick={(e) => {
-                  e.preventDefault();
-                  addToast('To reset your password, visit your Supabase Authentication dashboard.');
-                }}
+              <Link
+                to="/forgot-password"
                 style={{ fontSize: '11px', color: 'var(--text-secondary)', textDecoration: 'underline' }}
               >
                 Forgot password?
-              </a>
+              </Link>
             </div>
 
             <div style={{ position: 'relative' }}>
