@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useMemo, useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Store,
   Package,
@@ -7,19 +7,20 @@ import {
   CheckCircle2,
   XCircle,
   Gavel,
-  ArrowRight,
   Plus,
   ExternalLink,
   Tag,
   Calendar,
   ShieldCheck,
-  AlertCircle,
-  ChevronDown
+  ChevronDown,
+  Save,
+  UserCircle
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useProducts } from '../context/ProductsContext';
 import { useAuctions } from '../context/AuctionContext';
 import { useCart } from '../context/CartContext';
+import { useSellerProfile } from '../context/SellerProfileContext';
 import { formatINR } from '../data/products';
 
 // Status config: label, colour tokens, icon
@@ -86,7 +87,7 @@ const StatusBadge = ({ status }) => {
 };
 
 const formatDate = (iso) => {
-  if (!iso) return '—';
+  if (!iso) return 'N/A';
   try {
     return new Date(iso).toLocaleDateString('en-GB', {
       day: 'numeric', month: 'short', year: 'numeric'
@@ -98,12 +99,53 @@ const formatDate = (iso) => {
 
 export const MyProducts = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { customProducts, updateProductStatus } = useProducts();
   const { liveAuctions } = useAuctions();
   const { orders } = useCart();
+  const { getSellerProfile, updateSellerProfile } = useSellerProfile();
 
   const [filterStatus, setFilterStatus] = useState('all');
+
+  // Profile edit panel state
+  const [profileEditOpen, setProfileEditOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({ displayName: '', aboutMe: '', shopDescription: '', avatarUrl: '' });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
+
+  // Auto-open profile edit panel if ?edit=profile in URL
+  useEffect(() => {
+    if (searchParams.get('edit') === 'profile') {
+      setProfileEditOpen(true);
+    }
+  }, []);
+
+  // Initialize form from stored profile
+  useEffect(() => {
+    if (!user) return;
+    const profile = getSellerProfile(user.id);
+    if (profile) {
+      setProfileForm({
+        displayName: profile.displayName || user.name || '',
+        aboutMe: profile.aboutMe || '',
+        shopDescription: profile.shopDescription || '',
+        avatarUrl: profile.avatarUrl || ''
+      });
+    } else {
+      setProfileForm(f => ({ ...f, displayName: user.name || '' }));
+    }
+  }, [user && user.id]);
+
+  const handleProfileSave = () => {
+    setProfileSaving(true);
+    updateSellerProfile(user.id, profileForm);
+    setTimeout(() => {
+      setProfileSaving(false);
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 3000);
+    }, 400);
+  };
 
   // Redirect unauthenticated users
   if (!user) {
@@ -184,7 +226,7 @@ export const MyProducts = () => {
       <div className="container" style={{ maxWidth: '1080px' }}>
 
         {/* Page Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '32px', flexWrap: 'wrap', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '28px', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <span className="eyebrow" style={{ margin: 0, marginBottom: '6px', display: 'block' }}>Seller Dashboard</span>
             <h1 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.4rem)', margin: 0, fontFamily: 'var(--font-serif)' }}>
@@ -204,6 +246,224 @@ export const MyProducts = () => {
             <Plus size={15} />
             <span>New Listing</span>
           </Link>
+        </div>
+
+        {/* Seller Profile Section */}
+        <div style={{
+          backgroundColor: '#FFFFFF',
+          border: '1px solid var(--border-color)',
+          borderRadius: 'var(--radius-xs)',
+          marginBottom: '28px',
+          overflow: 'hidden'
+        }}>
+          {/* Panel Header (clickable toggle) */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '16px 20px',
+              borderBottom: profileEditOpen ? '1px solid var(--border-color)' : 'none',
+              cursor: 'pointer',
+              userSelect: 'none'
+            }}
+            onClick={() => setProfileEditOpen(o => !o)}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '38px', height: '38px', borderRadius: '50%',
+                backgroundColor: 'rgba(120,59,75,0.1)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0
+              }}>
+                <UserCircle size={18} color="var(--accent-burgundy)" />
+              </div>
+              <div>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>My Seller Profile</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '1px' }}>
+                  {profileEditOpen ? 'Edit your public shop information' : 'Manage your public shop information'}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Link
+                to={`/seller/${user.id}`}
+                onClick={e => e.stopPropagation()}
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--accent-burgundy)',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '5px 10px',
+                  border: '1px solid rgba(120,59,75,0.25)',
+                  borderRadius: 'var(--radius-xs)',
+                  textDecoration: 'none'
+                }}
+              >
+                <ExternalLink size={12} />
+                View Public Profile
+              </Link>
+              <ChevronDown
+                size={16}
+                color="var(--text-secondary)"
+                style={{ transform: profileEditOpen ? 'rotate(180deg)' : 'rotate(0)', transition: 'transform 200ms ease' }}
+              />
+            </div>
+          </div>
+
+          {/* Edit Form (collapsible) */}
+          {profileEditOpen && (
+            <div style={{ padding: '20px 24px' }}>
+              <div style={{ display: 'grid', gap: '16px', maxWidth: '640px' }}>
+
+                {/* Display Name */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Display Name
+                  </label>
+                  <input
+                    type="text"
+                    value={profileForm.displayName}
+                    onChange={e => setProfileForm(f => ({ ...f, displayName: e.target.value }))}
+                    placeholder="Your name or shop name"
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-xs)',
+                      fontSize: '13px',
+                      color: 'var(--text-primary)',
+                      backgroundColor: 'var(--bg-primary)',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+
+                {/* About Me */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    About Me
+                  </label>
+                  <textarea
+                    value={profileForm.aboutMe}
+                    onChange={e => setProfileForm(f => ({ ...f, aboutMe: e.target.value }))}
+                    placeholder="Tell buyers a bit about yourself..."
+                    rows={3}
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-xs)',
+                      fontSize: '13px',
+                      color: 'var(--text-primary)',
+                      backgroundColor: 'var(--bg-primary)',
+                      outline: 'none',
+                      resize: 'vertical',
+                      lineHeight: 1.6,
+                      boxSizing: 'border-box',
+                      fontFamily: 'inherit'
+                    }}
+                  />
+                </div>
+
+                {/* Shop Description */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Shop Description
+                  </label>
+                  <textarea
+                    value={profileForm.shopDescription}
+                    onChange={e => setProfileForm(f => ({ ...f, shopDescription: e.target.value }))}
+                    placeholder="Describe your shop, what you sell, and what makes it unique..."
+                    rows={4}
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-xs)',
+                      fontSize: '13px',
+                      color: 'var(--text-primary)',
+                      backgroundColor: 'var(--bg-primary)',
+                      outline: 'none',
+                      resize: 'vertical',
+                      lineHeight: 1.6,
+                      boxSizing: 'border-box',
+                      fontFamily: 'inherit'
+                    }}
+                  />
+                </div>
+
+                {/* Avatar URL */}
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Profile Picture URL
+                  </label>
+                  <input
+                    type="url"
+                    value={profileForm.avatarUrl}
+                    onChange={e => setProfileForm(f => ({ ...f, avatarUrl: e.target.value }))}
+                    placeholder="https://example.com/your-photo.jpg"
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-xs)',
+                      fontSize: '13px',
+                      color: 'var(--text-primary)',
+                      backgroundColor: 'var(--bg-primary)',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  {profileForm.avatarUrl && (
+                    <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <img
+                        src={profileForm.avatarUrl}
+                        alt="Preview"
+                        style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border-color)' }}
+                        onError={e => { e.target.style.display = 'none'; }}
+                      />
+                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Preview</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Save Row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', paddingTop: '4px' }}>
+                  <button
+                    onClick={handleProfileSave}
+                    disabled={profileSaving}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '7px',
+                      padding: '9px 20px',
+                      backgroundColor: profileSaving ? 'rgba(120,59,75,0.6)' : 'var(--accent-burgundy)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 'var(--radius-xs)',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      cursor: profileSaving ? 'not-allowed' : 'pointer',
+                      transition: 'all 150ms ease'
+                    }}
+                  >
+                    <Save size={14} />
+                    {profileSaving ? 'Saving...' : 'Save Profile'}
+                  </button>
+                  {profileSaved && (
+                    <span style={{ fontSize: '12px', color: 'var(--badge-shipping-text)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <CheckCircle2 size={13} />
+                      Profile saved!
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Summary Stats */}
@@ -355,10 +615,7 @@ export const MyProducts = () => {
           </div>
         )}
 
-        {/* Sold Products — detailed view */}
-        {myProducts.some(p => p.derivedStatus === 'sold') && filterStatus !== 'all' && filterStatus !== 'sold' && (
-          null
-        )}
+        {/* Sold Products detailed view */}
         {(filterStatus === 'all' || filterStatus === 'sold') && myProducts.some(p => p.derivedStatus === 'sold') && (
           <SoldProductsList products={myProducts.filter(p => p.derivedStatus === 'sold')} />
         )}
@@ -378,7 +635,6 @@ export const MyProducts = () => {
 
 // Individual product row in the table
 const ProductRow = ({ product, isLast, liveAuctions, updateProductStatus }) => {
-  const [expanded, setExpanded] = useState(false);
   const liveAuction = liveAuctions.find(a =>
     a.productId === product.id || a.id === product.id || a.id === product.auctionId
   );
@@ -391,7 +647,6 @@ const ProductRow = ({ product, isLast, liveAuctions, updateProductStatus }) => {
       borderRadius: isLast ? '0 0 var(--radius-xs) var(--radius-xs)' : '0',
       transition: 'background-color 120ms ease'
     }}>
-      {/* Main Row */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: '60px 1fr 120px 130px 140px 80px',
@@ -440,7 +695,6 @@ const ProductRow = ({ product, isLast, liveAuctions, updateProductStatus }) => {
         {/* Status */}
         <div>
           <StatusBadge status={product.derivedStatus} />
-          {/* For pending items, show approve/reject admin simulation */}
           {product.derivedStatus === 'pending' && (
             <div style={{ marginTop: '6px', display: 'flex', gap: '6px' }}>
               <button
@@ -488,7 +742,6 @@ const ProductRow = ({ product, isLast, liveAuctions, updateProductStatus }) => {
         </div>
       </div>
 
-      {/* Mobile Card Style (shown below 720px via CSS) */}
       <style>{`
         @media (max-width: 720px) {
           .product-table-row {
@@ -534,7 +787,6 @@ const SoldProductsList = ({ products }) => {
                 flexWrap: 'wrap'
               }}
             >
-              {/* Thumbnail */}
               <div style={{
                 width: '64px', height: '64px', borderRadius: 'var(--radius-xs)',
                 overflow: 'hidden', flexShrink: 0, backgroundColor: 'var(--surface-secondary)',
@@ -546,7 +798,6 @@ const SoldProductsList = ({ products }) => {
                 }
               </div>
 
-              {/* Info */}
               <div style={{ flex: 1, minWidth: '200px' }}>
                 <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
                   {product.name}
@@ -565,7 +816,6 @@ const SoldProductsList = ({ products }) => {
                 </div>
               </div>
 
-              {/* Sale Price */}
               <div style={{ textAlign: 'right', minWidth: '120px' }}>
                 <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>
                   {formatINR(product.price)}
@@ -577,7 +827,6 @@ const SoldProductsList = ({ products }) => {
                 )}
               </div>
 
-              {/* Status + Link */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', minWidth: '100px' }}>
                 <StatusBadge status="sold" />
                 {order && (

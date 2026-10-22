@@ -8,6 +8,7 @@ import { WishlistProvider } from './context/WishlistContext';
 import { AuctionProvider } from './context/AuctionContext';
 import { ReviewsProvider } from './context/ReviewsContext';
 import { FollowProvider } from './context/FollowContext';
+import { SellerProfileProvider } from './context/SellerProfileContext';
 
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
@@ -49,6 +50,7 @@ export const App = () => {
               <AuctionProvider>
                 <FollowProvider>
                 <ReviewsProvider>
+                  <SellerProfileProvider>
                   <ScrollToTop />
                   {/* Announcement bar removed per specification */}
                   <Navbar />
@@ -81,6 +83,7 @@ export const App = () => {
                   </main>
                   <Footer />
                   <ToastContainer />
+                  </SellerProfileProvider>
                 </ReviewsProvider>
                 </FollowProvider>
               </AuctionProvider>
