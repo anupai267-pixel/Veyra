@@ -6,6 +6,9 @@ import { ProductsProvider } from './context/ProductsContext';
 import { CartProvider } from './context/CartContext';
 import { WishlistProvider } from './context/WishlistContext';
 import { AuctionProvider } from './context/AuctionContext';
+import { ReviewsProvider } from './context/ReviewsContext';
+import { FollowProvider } from './context/FollowContext';
+import { SellerProfileProvider } from './context/SellerProfileContext';
 
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
@@ -27,6 +30,8 @@ import { SignUp } from './pages/SignUp';
 import { ForgotPassword } from './pages/ForgotPassword';
 import { ResetPassword } from './pages/ResetPassword';
 import { Sell } from './pages/Sell';
+import { SellerShop } from './pages/SellerShop';
+import { MyProducts } from './pages/MyProducts';
 
 // Scroll to top helper on route change
 const ScrollToTop = () => {
@@ -45,6 +50,7 @@ export const App = () => {
           <CartProvider>
             <WishlistProvider>
               <AuctionProvider>
+<<<<<<< HEAD
                 <ScrollToTop />
                 {/* Announcement bar removed per specification */}
                 <Navbar />
@@ -77,6 +83,46 @@ export const App = () => {
                 </main>
                 <Footer />
                 <ToastContainer />
+=======
+                <FollowProvider>
+                <ReviewsProvider>
+                  <SellerProfileProvider>
+                  <ScrollToTop />
+                  {/* Announcement bar removed per specification */}
+                  <Navbar />
+                  <main>
+                    <Routes>
+                      <Route path="/" element={<Home />} />
+                      <Route path="/shop" element={<Shop />} />
+                      <Route path="/explore" element={<Shop />} />
+                      <Route path="/categories" element={<Categories />} />
+                      <Route path="/live-auctions" element={<LiveAuctions />} />
+                      <Route path="/auctions" element={<LiveAuctions />} />
+                      <Route path="/upcoming-lots" element={<UpcomingLots />} />
+                      <Route path="/live/:id" element={<LiveAuctionRoom />} />
+                      <Route path="/auction/:id" element={<LiveAuctionRoom />} />
+                      <Route path="/product/:id" element={<ProductDetails />} />
+                      <Route path="/seller/:sellerId" element={<SellerShop />} />
+                      <Route path="/schedule" element={<Schedule />} />
+                      <Route path="/account" element={<Account />} />
+                      <Route path="/profile" element={<Account />} />
+                      <Route path="/wishlist" element={<Wishlist />} />
+                      <Route path="/cart" element={<Cart />} />
+                      {/* Login and Registration pages kept EXACTLY as they are visually */}
+                      <Route path="/signin" element={<SignIn />} />
+                      <Route path="/signup" element={<SignUp />} />
+                      <Route path="/sell" element={<Sell />} />
+                      <Route path="/my-products" element={<MyProducts />} />
+                      {/* Fallback */}
+                      <Route path="*" element={<Home />} />
+                    </Routes>
+                  </main>
+                  <Footer />
+                  <ToastContainer />
+                  </SellerProfileProvider>
+                </ReviewsProvider>
+                </FollowProvider>
+>>>>>>> origin/main
               </AuctionProvider>
             </WishlistProvider>
           </CartProvider>

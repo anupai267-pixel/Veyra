@@ -153,20 +153,39 @@ export const ProductCard = ({ product, onQuickView }) => {
       {/* Product Details & Purchasing Actions */}
       <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
         <div>
-          {/* Seller & Verification */}
+          {/* Seller & Verification — clickable if seller has a sellerId */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
-            <span
-              style={{
-                fontSize: '11px',
-                color: 'var(--text-secondary)',
-                letterSpacing: '0.02em',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
-              }}
-            >
-              {product.seller}
-            </span>
+            {product.sellerId ? (
+              <Link
+                to={`/seller/${product.sellerId}`}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--text-secondary)',
+                  letterSpacing: '0.02em',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  transition: 'color 150ms ease'
+                }}
+                className="hover-burgundy"
+              >
+                {product.seller}
+              </Link>
+            ) : (
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--text-secondary)',
+                  letterSpacing: '0.02em',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}
+              >
+                {product.seller}
+              </span>
+            )}
             <CheckCircle2 size={12} color="var(--accent-burgundy)" />
           </div>
 

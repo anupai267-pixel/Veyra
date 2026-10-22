@@ -283,7 +283,14 @@ export const LiveAuctionRoom = () => {
               </h2>
 
               <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
-                Atelier: <strong style={{ color: 'var(--text-primary)' }}>{auction.seller || auction.maker}</strong>
+                Atelier:{' '}
+                {auction.sellerId ? (
+                  <Link to={`/seller/${auction.sellerId}`} className="hover-burgundy" style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                    {auction.seller || auction.maker}
+                  </Link>
+                ) : (
+                  <strong style={{ color: 'var(--text-primary)' }}>{auction.seller || auction.maker}</strong>
+                )}
               </p>
 
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>

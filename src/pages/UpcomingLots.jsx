@@ -299,7 +299,14 @@ export const UpcomingLots = () => {
                       </Link>
 
                       <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 4px 0' }}>
-                        Atelier: <strong style={{ color: 'var(--text-primary)' }}>{auction.seller || auction.maker}</strong>
+                        Atelier:{' '}
+                        {auction.sellerId ? (
+                          <Link to={`/seller/`} className="hover-burgundy" style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                            {auction.seller || auction.maker}
+                          </Link>
+                        ) : (
+                          <strong style={{ color: 'var(--text-primary)' }}>{auction.seller || auction.maker}</strong>
+                        )}
                       </p>
 
                       {auction.curatorNote && (

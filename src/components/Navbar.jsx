@@ -14,7 +14,11 @@ import {
   Package,
   Gavel,
   Store,
-  Clock
+  Clock,
+  MessageSquare,
+  HelpCircle,
+  UserPlus,
+  ClipboardList
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
@@ -362,153 +366,138 @@ export const Navbar = () => {
                   <ChevronDown size={14} color="var(--text-secondary)" />
                 </button>
 
-                {/* Account Dropdown Inspired by Christie's Layout */}
+                {/* Etsy-Style Account Dropdown */}
                 {profileDropdownOpen && (
                   <div
                     style={{
                       position: 'absolute',
                       top: 'calc(100% + 8px)',
                       right: 0,
-                      width: '260px',
+                      width: '280px',
                       backgroundColor: '#FFFFFF',
                       border: '1px solid var(--border-color)',
                       borderRadius: 'var(--radius-xs)',
-                      boxShadow: '0 12px 32px rgba(0, 0, 0, 0.09)',
+                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.10)',
                       zIndex: 1000,
                       overflow: 'hidden'
                     }}
                   >
-                    {/* User Header */}
-                    <div
-                      style={{
-                        padding: '16px 18px',
-                        borderBottom: '1px solid var(--border-color)',
-                        backgroundColor: 'var(--bg-primary)'
-                      }}
-                    >
-                      <span
+                    {/* GROUP 1 — Account Identity */}
+                    <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div
                         style={{
-                          fontSize: '11px',
-                          letterSpacing: '0.08em',
-                          textTransform: 'uppercase',
-                          color: 'var(--accent-burgundy)',
-                          fontWeight: 600,
-                          display: 'block',
-                          marginBottom: '2px'
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '50%',
+                          backgroundColor: 'var(--accent-burgundy)',
+                          color: '#FFFFFF',
+                          fontSize: '14px',
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          letterSpacing: '0.04em',
+                          flexShrink: 0
                         }}
                       >
-                        {user.role === 'artisan' || user.role === 'seller' ? 'Maker Atelier' : 'Collector Account'}
-                      </span>
-                      <strong style={{ display: 'block', fontSize: 'var(--text-sm)', color: 'var(--text-primary)' }}>
-                        {user.name}
-                      </strong>
-                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {user.email}
-                      </span>
+                        {getInitials(user.name)}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <strong style={{ display: 'block', fontSize: '14px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {user.name}
+                        </strong>
+                        <Link
+                          to="/account"
+                          style={{ fontSize: '12px', color: 'var(--accent-burgundy)', fontWeight: 500, display: 'block', marginTop: '1px' }}
+                        >
+                          View your profile
+                        </Link>
+                      </div>
                     </div>
 
-                    {/* Navigation Links */}
-                    <div style={{ padding: '8px 0' }}>
-                      <Link
-                        to="/account"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                          padding: '10px 18px',
-                          fontSize: 'var(--text-sm)',
-                          color: 'var(--text-primary)'
-                        }}
-                        className="dropdown-item"
-                      >
-                        <User size={16} color="var(--text-secondary)" />
-                        <span>Account & Profile</span>
-                      </Link>
+                    {/* Divider */}
+                    <div style={{ height: '1px', backgroundColor: 'var(--border-color)' }} />
 
+                    {/* GROUP 2 - Shopping & Activity */}
+                    <div style={{ padding: '6px 0' }}>
                       <Link
                         to="/account?tab=orders"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                          padding: '10px 18px',
-                          fontSize: 'var(--text-sm)',
-                          color: 'var(--text-primary)'
-                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 16px', fontSize: '13px', color: 'var(--text-primary)' }}
                         className="dropdown-item"
                       >
                         <Package size={16} color="var(--text-secondary)" />
-                        <span>My Orders & History</span>
+                        <span>My Purchases & Orders</span>
                       </Link>
-
                       <Link
                         to="/account?tab=bids"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                          padding: '10px 18px',
-                          fontSize: 'var(--text-sm)',
-                          color: 'var(--text-primary)'
-                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 16px', fontSize: '13px', color: 'var(--text-primary)' }}
                         className="dropdown-item"
                       >
                         <Gavel size={16} color="var(--text-secondary)" />
-                        <span>My Bids</span>
+                        <span>My Auctions & Bids</span>
                       </Link>
-
+                      <Link
+                        to="/account?tab=messages"
+                        style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 16px', fontSize: '13px', color: 'var(--text-primary)' }}
+                        className="dropdown-item"
+                      >
+                        <MessageSquare size={16} color="var(--text-secondary)" />
+                        <span>Messages</span>
+                      </Link>
                       <Link
                         to="/schedule"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                          padding: '10px 18px',
-                          fontSize: 'var(--text-sm)',
-                          color: 'var(--text-primary)'
-                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 16px', fontSize: '13px', color: 'var(--text-primary)' }}
                         className="dropdown-item"
                       >
-                        <Clock size={16} color="var(--text-secondary)" />
-                        <span>Scheduled Auctions</span>
-                      </Link>
-
-                      <Link
-                        to="/sell"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                          padding: '10px 18px',
-                          fontSize: 'var(--text-sm)',
-                          color: 'var(--accent-burgundy)',
-                          fontWeight: 500
-                        }}
-                        className="dropdown-item"
-                      >
-                        <Store size={16} color="var(--accent-burgundy)" />
-                        <span>Seller Atelier / List Object</span>
-                      </Link>
-
-                      <Link
-                        to="/account?tab=settings"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                          padding: '10px 18px',
-                          fontSize: 'var(--text-sm)',
-                          color: 'var(--text-primary)'
-                        }}
-                        className="dropdown-item"
-                      >
-                        <Settings size={16} color="var(--text-secondary)" />
-                        <span>Settings</span>
+                        <Calendar size={16} color="var(--text-secondary)" />
+                        <span>Reservations</span>
                       </Link>
                     </div>
 
-                    {/* Sign Out */}
-                    <div style={{ borderTop: '1px solid var(--border-color)', padding: '6px 0' }}>
+                    {/* Divider */}
+                    <div style={{ height: '1px', backgroundColor: 'var(--border-color)' }} />
+
+                    {/* GROUP 3 - Selling */}
+                    <div style={{ padding: '6px 0' }}>
+                      <Link
+                        to="/sell"
+                        style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 16px', fontSize: '13px', color: 'var(--accent-burgundy)', fontWeight: 600 }}
+                        className="dropdown-item"
+                      >
+                        <Store size={16} color="var(--accent-burgundy)" />
+                        <span>Sell on Veyra</span>
+                      </Link>
+                      <Link
+                        to="/my-products"
+                        style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 16px', fontSize: '13px', color: 'var(--text-primary)' }}
+                        className="dropdown-item"
+                      >
+                        <ClipboardList size={16} color="var(--text-secondary)" />
+                        <span>My Products</span>
+                      </Link>
+                    </div>
+
+                    {/* Divider */}
+                    <div style={{ height: '1px', backgroundColor: 'var(--border-color)' }} />
+
+                    {/* GROUP 4 - Support & Account */}
+                    <div style={{ padding: '6px 0' }}>
+                      <Link
+                        to="/help"
+                        style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 16px', fontSize: '13px', color: 'var(--text-primary)' }}
+                        className="dropdown-item"
+                      >
+                        <HelpCircle size={16} color="var(--text-secondary)" />
+                        <span>Help Centre</span>
+                      </Link>
+                      <Link
+                        to="/account?tab=settings"
+                        style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 16px', fontSize: '13px', color: 'var(--text-primary)' }}
+                        className="dropdown-item"
+                      >
+                        <Settings size={16} color="var(--text-secondary)" />
+                        <span>Account Settings</span>
+                      </Link>
                       <button
                         onClick={signOut}
                         style={{
@@ -516,11 +505,13 @@ export const Navbar = () => {
                           display: 'flex',
                           alignItems: 'center',
                           gap: '10px',
-                          padding: '10px 18px',
-                          fontSize: 'var(--text-sm)',
+                          padding: '9px 16px',
+                          fontSize: '13px',
                           color: 'var(--error-color)',
                           textAlign: 'left',
-                          cursor: 'pointer'
+                          cursor: 'pointer',
+                          background: 'none',
+                          border: 'none'
                         }}
                         className="dropdown-item"
                       >
@@ -531,6 +522,7 @@ export const Navbar = () => {
                   </div>
                 )}
               </div>
+
             ) : (
               <Link
                 to="/account"
