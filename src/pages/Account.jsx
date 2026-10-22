@@ -126,7 +126,7 @@ export const Account = () => {
     );
   }
 
-  // Get initials for profile avatar
+  // Get initials for profile avatar...
   const getInitials = (name) => {
     if (!name) return 'VY';
     const parts = name.trim().split(' ');
