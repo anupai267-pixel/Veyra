@@ -201,12 +201,22 @@ export const ProductDetails = () => {
               {product.name}
             </h1>
 
-            {/* Seller & Studio */}
+            {/* Seller & Studio — clicking seller name navigates to their shop */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
               <Store size={15} color="var(--accent-burgundy)" />
-              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', fontWeight: 500 }}>
-                {product.seller}
-              </span>
+              {product.sellerId ? (
+                <Link
+                  to={`/seller/${product.sellerId}`}
+                  style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', fontWeight: 500 }}
+                  className="hover-burgundy"
+                >
+                  {product.seller}
+                </Link>
+              ) : (
+                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-primary)', fontWeight: 500 }}>
+                  {product.seller}
+                </span>
+              )}
               {product.location && (
                 <>
                   <span style={{ color: 'var(--border-color)' }}>•</span>

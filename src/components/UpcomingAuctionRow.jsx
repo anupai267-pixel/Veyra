@@ -63,7 +63,19 @@ export const UpcomingAuctionRow = ({ auction }) => {
             </h4>
           </Link>
           <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', margin: 0 }}>
-            Atelier: {auction.seller || auction.maker} {auction.curatorNote ? `— ${auction.curatorNote}` : ''}
+            Atelier:{' '}
+            {auction.sellerId ? (
+              <Link
+                to={`/seller/${auction.sellerId}`}
+                className="hover-burgundy"
+                style={{ color: 'var(--text-secondary)', fontWeight: 500 }}
+              >
+                {auction.seller || auction.maker}
+              </Link>
+            ) : (
+              <span>{auction.seller || auction.maker}</span>
+            )}
+            {auction.curatorNote ? ` — ${auction.curatorNote}` : ''}
           </p>
         </div>
       </div>

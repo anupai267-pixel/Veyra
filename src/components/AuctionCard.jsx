@@ -191,8 +191,20 @@ export const AuctionCard = ({ auction, onOpenBidModal }) => {
             </h3>
           </Link>
 
+          {/* Seller name — clickable to navigate to seller shop */}
           <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-            Atelier: <strong style={{ color: 'var(--text-primary)' }}>{auction.seller || auction.maker}</strong>
+            Atelier:{' '}
+            {auction.sellerId ? (
+              <Link
+                to={`/seller/${auction.sellerId}`}
+                className="hover-burgundy"
+                style={{ color: 'var(--text-primary)', fontWeight: 600 }}
+              >
+                {auction.seller || auction.maker}
+              </Link>
+            ) : (
+              <strong style={{ color: 'var(--text-primary)' }}>{auction.seller || auction.maker}</strong>
+            )}
           </p>
         </div>
 
