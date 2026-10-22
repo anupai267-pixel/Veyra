@@ -18,7 +18,8 @@ import {
   Save,
   Phone,
   Mail,
-  AlertCircle
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
@@ -26,7 +27,6 @@ import { useWishlist } from '../context/WishlistContext';
 import { useAuctions } from '../context/AuctionContext';
 import { useProducts } from '../context/ProductsContext';
 import { formatINR } from '../data/products';
-import { PhoneVerification } from '../components/PhoneVerification';
 
 export const Account = () => {
   const { user, signOut, updateProfile } = useAuth();
@@ -46,9 +46,11 @@ export const Account = () => {
     name: user?.name || 'Collector',
     username: user?.username || 'collector_user',
     email: user?.email || '',
+    phone: user?.phone || '',
     studio: user?.studio || ''
   });
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [phoneError, setPhoneError] = useState('');
 
   // Sync tab with URL
   useEffect(() => {
@@ -59,9 +61,10 @@ export const Account = () => {
   useEffect(() => {
     if (user) {
       setFormData({
-        name: user.name || '',
-        username: user.username || (user.email ? user.email.split('@')[0] : 'collector_user'),
+        name: user.name && user.name !== 'Complete your profile' ? user.name : '',
+        username: user.username || '',
         email: user.email || '',
+        phone: user.phone || '',
         studio: user.studio || ''
       });
     }
@@ -75,9 +78,19 @@ export const Account = () => {
 
   const handleProfileSave = async (e) => {
     e.preventDefault();
+    // Validate phone if provided
+    if (formData.phone) {
+      const digits = formData.phone.replace(/[\s\-().+]/g, '');
+      if (!/^\d{7,15}$/.test(digits)) {
+        setPhoneError('Please enter a valid phone number (7–15 digits, with country code).');
+        return;
+      }
+    }
+    setPhoneError('');
     await updateProfile({
       name: formData.name,
       username: formData.username,
+      phone: formData.phone.trim() || null,
       studio: formData.studio
     });
     setSavedSuccess(true);
@@ -126,8 +139,8 @@ export const Account = () => {
 
   // Get initials for profile avatar...
   const getInitials = (name) => {
-    if (!name) return 'VY';
-    const parts = name.trim().split(' ');
+    if (!name || name === 'Complete your profile') return 'VY';
+    const parts = name.trim().split(' ').filter(Boolean);
     if (parts.length >= 2) {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
@@ -187,9 +200,9 @@ export const Account = () => {
             </div>
 
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '2px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '2px', flexWrap: 'wrap' }}>
                 <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.75rem', margin: 0 }}>
-                  {user.name}
+                  {user.name || 'Complete your profile'}
                 </h1>
                 <span
                   style={{
@@ -205,45 +218,45 @@ export const Account = () => {
                 >
                   {user.role === 'artisan' || user.role === 'seller' ? 'Maker Atelier' : 'Collector Member'}
                 </span>
+                {user.isProfileIncomplete && (
+                  <button
+                    onClick={() => handleTabChange('settings')}
+                    style={{
+                      fontSize: '11px',
+                      color: 'var(--accent-burgundy)',
+                      backgroundColor: 'rgba(120, 59, 75, 0.08)',
+                      border: '1px solid rgba(120, 59, 75, 0.2)',
+                      padding: '2px 8px',
+                      borderRadius: 'var(--radius-xs)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Please set your full name in Settings
+                  </button>
+                )}
               </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  <span>@{user.username || user.email?.split('@')[0]}</span>
-                  <span style={{ opacity: 0.3 }}>•</span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                    <Mail size={13} />
-                    {user.email}
-                  </span>
-                  {user.phone && (
-                    <>
-                      <span style={{ opacity: 0.3 }}>•</span>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                        <Phone size={13} />
-                        {user.phone}
-                        {user.phone_verified && (
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '3px',
-                              fontSize: '10px',
-                              fontWeight: 700,
-                              letterSpacing: '0.04em',
-                              color: 'var(--success-color)',
-                              backgroundColor: 'var(--badge-shipping-bg)',
-                              padding: '1px 6px',
-                              borderRadius: '10px',
-                              textTransform: 'uppercase'
-                            }}
-                          >
-                            <CheckCircle2 size={10} />
-                            Verified
-                          </span>
-                        )}
-                      </span>
-                    </>
-                  )}
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                {user.username && (
+                  <>
+                    <span>@{user.username}</span>
+                    <span style={{ opacity: 0.3 }}>•</span>
+                  </>
+                )}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <Mail size={13} />
+                  {user.email}
+                </span>
+                {user.phone && (
+                  <>
+                    <span style={{ opacity: 0.3 }}>•</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <Phone size={13} />
+                      {user.phone}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -868,7 +881,7 @@ export const Account = () => {
                   {/* Username */}
                   <div className="form-group">
                     <label className="form-label" htmlFor="username">
-                      Username / Handle *
+                      Username / Handle (Optional)
                     </label>
                     <input
                       id="username"
@@ -876,7 +889,7 @@ export const Account = () => {
                       className="form-input"
                       value={formData.username}
                       onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                      required
+                      placeholder="e.g. nidheesha_h"
                     />
                   </div>
 
@@ -896,6 +909,34 @@ export const Account = () => {
                     <span style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                       Primary authentication handle managed through secure provider.
                     </span>
+                  </div>
+
+                  {/* Phone Number */}
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="settings-phone">
+                      Contact Phone Number
+                    </label>
+                    <input
+                      id="settings-phone"
+                      type="tel"
+                      className="form-input"
+                      value={formData.phone}
+                      onChange={(e) => {
+                        setFormData({ ...formData, phone: e.target.value });
+                        setPhoneError('');
+                      }}
+                      placeholder="e.g. +91 98201 44820"
+                    />
+                    {phoneError ? (
+                      <span style={{ fontSize: '10.5px', color: 'var(--error-color)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <AlertCircle size={12} />
+                        {phoneError}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                        Include country code (e.g. +91 for India). Leave blank to remove.
+                      </span>
+                    )}
                   </div>
 
                 {/* Studio / Maker Designation */}
@@ -920,9 +961,6 @@ export const Account = () => {
                     </button>
                   </div>
                 </form>
-
-                {/* Phone Number Verification Section */}
-                <PhoneVerification />
               </div>
             )}
           </div>

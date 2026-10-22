@@ -73,8 +73,8 @@ export const Navbar = () => {
   };
 
   const getInitials = (name) => {
-    if (!name) return 'VY';
-    const parts = name.trim().split(' ');
+    if (!name || name === 'Complete your profile') return 'VY';
+    const parts = name.trim().split(' ').filter(Boolean);
     if (parts.length >= 2) {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
@@ -349,11 +349,15 @@ export const Navbar = () => {
                     style={{
                       fontSize: 'var(--text-sm)',
                       fontWeight: 500,
-                      color: 'var(--text-primary)'
+                      color: 'var(--text-primary)',
+                      maxWidth: '160px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
                     }}
                     className="hide-on-mobile"
                   >
-                    {user.name.split(' ')[0]}
+                    {user.name}
                   </span>
                   <ChevronDown size={14} color="var(--text-secondary)" />
                 </button>
@@ -955,7 +959,7 @@ export const Navbar = () => {
                   className="btn btn-secondary"
                   style={{ width: '100%', height: '40px', fontSize: '13px' }}
                 >
-                  Sign Out ({user.name.split(' ')[0]})
+                  Sign Out ({user.name})
                 </button>
               ) : (
                 <Link

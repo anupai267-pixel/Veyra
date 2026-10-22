@@ -4,6 +4,26 @@ import { useToast } from './ToastContext';
 
 const AuthContext = createContext(null);
 const DEMO_USER_STORAGE_KEY = 'veyra_active_user';
+const USERS_STORAGE_KEY = 'veyra_users_db';
+
+// Helper to access persistent registered users database
+const getRegisteredUsers = () => {
+  try {
+    const raw = localStorage.getItem(USERS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (err) {
+    console.warn('Failed to parse registered users db:', err);
+    return {};
+  }
+};
+
+const saveRegisteredUsers = (usersMap) => {
+  try {
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersMap));
+  } catch (err) {
+    console.warn('Failed to save registered users db:', err);
+  }
+};
 
 export const AuthProvider = ({ children }) => {
   const { addToast } = useToast();
@@ -15,22 +35,32 @@ export const AuthProvider = ({ children }) => {
   const mapSupabaseUser = (supabaseUser) => {
     if (!supabaseUser) return null;
     const metadata = supabaseUser.user_metadata || {};
-    const nameFromEmail = supabaseUser.email ? supabaseUser.email.split('@')[0] : 'Collector';
-    const formattedName =
+    const normEmail = supabaseUser.email ? supabaseUser.email.toLowerCase().trim() : '';
+
+    // Check saved full name from Supabase metadata or local database
+    const usersDb = getRegisteredUsers();
+    const localRecord = normEmail ? usersDb[normEmail] : null;
+
+    const savedFullName = (
       metadata.full_name ||
       metadata.name ||
-      (nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1));
+      localRecord?.name ||
+      ''
+    ).trim();
+
+    // Do NOT derive user name from email prefix! Provide safe fallback
+    const formattedName = savedFullName || 'Complete your profile';
 
     return {
       id: supabaseUser.id,
       email: supabaseUser.email,
       name: formattedName,
-      username: metadata.username || nameFromEmail.toLowerCase(),
-      phone: metadata.phone || supabaseUser.phone || null,
-      phone_verified: metadata.phone_verified === true || false,
-      role: metadata.role || 'collector',
-      studio: metadata.studio || null,
-      isSupabase: true
+      username: metadata.username || localRecord?.username || null,
+      phone: metadata.phone || supabaseUser.phone || localRecord?.phone || null,
+      role: metadata.role || localRecord?.role || 'collector',
+      studio: metadata.studio || localRecord?.studio || null,
+      isSupabase: true,
+      isProfileIncomplete: !savedFullName
     };
   };
 
@@ -49,11 +79,20 @@ export const AuthProvider = ({ children }) => {
           setSession(initialSession);
           setUser(mapSupabaseUser(initialSession.user));
         } else {
-          // If no Supabase session, check if there was a local demo user
+          // If no Supabase session, check if there was a local active user
           const savedDemo = localStorage.getItem(DEMO_USER_STORAGE_KEY);
           if (savedDemo) {
             try {
-              setUser(JSON.parse(savedDemo));
+              const parsed = JSON.parse(savedDemo);
+              if (parsed?.email) {
+                const usersDb = getRegisteredUsers();
+                const record = usersDb[parsed.email.toLowerCase().trim()];
+                if (record?.name) {
+                  parsed.name = record.name;
+                  parsed.isProfileIncomplete = false;
+                }
+              }
+              setUser(parsed);
             } catch (e) {
               setUser(null);
             }
@@ -82,11 +121,51 @@ export const AuthProvider = ({ children }) => {
         subscription.unsubscribe();
       };
     } else {
-      // Supabase credentials pending: restore demo session from localStorage
+      // Supabase credentials pending: restore session from persistent local database / storage
       try {
         const savedDemo = localStorage.getItem(DEMO_USER_STORAGE_KEY);
         if (savedDemo) {
-          setUser(JSON.parse(savedDemo));
+          const parsed = JSON.parse(savedDemo);
+          if (parsed && parsed.email) {
+            const usersDb = getRegisteredUsers();
+            const normEmail = parsed.email.toLowerCase().trim();
+            const record = usersDb[normEmail];
+
+            if (record && record.name) {
+              // Exact saved name from persistent users db
+              parsed.name = record.name;
+              parsed.isProfileIncomplete = false;
+            } else if (!record) {
+              // Check if initial user's name was auto-derived from email prefix
+              const emailPrefix = normEmail.split('@')[0];
+              const wasAutoDerived = parsed.name && (
+                parsed.name.toLowerCase() === emailPrefix.toLowerCase() ||
+                parsed.name.toLowerCase() === (emailPrefix.charAt(0).toUpperCase() + emailPrefix.slice(1)).toLowerCase()
+              );
+              const nameToSave = wasAutoDerived ? '' : (parsed.name || '');
+
+              usersDb[normEmail] = {
+                id: parsed.id || 'usr_' + Date.now(),
+                name: nameToSave,
+                email: normEmail,
+                username: parsed.username || null,
+                phone: parsed.phone || null,
+                role: parsed.role || 'collector',
+                studio: parsed.studio || null
+              };
+              saveRegisteredUsers(usersDb);
+
+              parsed.name = nameToSave || 'Complete your profile';
+              parsed.isProfileIncomplete = !nameToSave;
+            } else {
+              parsed.name = 'Complete your profile';
+              parsed.isProfileIncomplete = true;
+            }
+
+            setUser(parsed);
+          } else {
+            setUser(parsed);
+          }
         }
       } catch (e) {
         setUser(null);
@@ -95,7 +174,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // Save demo user if not using Supabase
+  // Save active session if not using Supabase
   useEffect(() => {
     if (!isSupabaseConfigured) {
       if (user && !user.isSupabase) {
@@ -112,10 +191,12 @@ export const AuthProvider = ({ children }) => {
       return { success: false, error: 'Please enter both email and password.' };
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
+
     if (isSupabaseConfigured && supabase) {
       setLoading(true);
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: normalizedEmail,
         password
       });
       setLoading(false);
@@ -127,29 +208,80 @@ export const AuthProvider = ({ children }) => {
       const appUser = mapSupabaseUser(data.user);
       setUser(appUser);
       setSession(data.session);
-      addToast(`Welcome back, ${appUser.name}.`);
+      addToast(
+        appUser.name && !appUser.isProfileIncomplete
+          ? `Welcome back, ${appUser.name}.`
+          : 'Welcome back.'
+      );
       return { success: true };
     }
 
-    // Demo fallback when Supabase keys are not yet configured in .env.local
-    const nameFromEmail = email.split('@')[0];
-    const formattedName = nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
-    const savedDemo = localStorage.getItem(DEMO_USER_STORAGE_KEY);
-    let existingData = {};
-    try { existingData = savedDemo ? JSON.parse(savedDemo) : {}; } catch(e) {}
-    const demoUser = {
-      id: existingData.id || 'demo-' + Date.now(),
-      name: formattedName,
-      username: nameFromEmail.toLowerCase(),
-      phone: existingData.phone || null,
-      phone_verified: existingData.phone_verified || false,
-      email,
-      role: existingData.role || 'collector',
-      isSupabase: false
+    // Local persistent user database sign-in
+    const usersDb = getRegisteredUsers();
+    const existingUser = usersDb[normalizedEmail];
+
+    if (existingUser) {
+      if (existingUser.password && existingUser.password !== password) {
+        return { success: false, error: 'Incorrect password. Please verify your credentials.' };
+      }
+
+      const savedFullName = (existingUser.name || '').trim();
+      const resolvedName = savedFullName || 'Complete your profile';
+
+      const authenticatedUser = {
+        id: existingUser.id || 'usr_' + Date.now(),
+        name: resolvedName,
+        email: existingUser.email,
+        username: existingUser.username || null,
+        phone: existingUser.phone || null,
+        role: existingUser.role || 'collector',
+        studio: existingUser.studio || null,
+        isSupabase: false,
+        isProfileIncomplete: !savedFullName
+      };
+
+      setUser(authenticatedUser);
+      localStorage.setItem(DEMO_USER_STORAGE_KEY, JSON.stringify(authenticatedUser));
+      addToast(
+        savedFullName
+          ? `Welcome back, ${savedFullName}.`
+          : 'Signed in. Please complete your profile.'
+      );
+      return { success: true };
+    }
+
+    // Account not yet in database: create with empty name and prompt profile completion
+    // Do NOT derive name from email address!
+    const newDemoUser = {
+      id: 'usr_' + Date.now(),
+      name: '',
+      email: normalizedEmail,
+      password: password,
+      username: null,
+      phone: null,
+      role: 'collector',
+      studio: null,
+      isSupabase: false,
+      createdAt: new Date().toISOString()
     };
-    setUser(demoUser);
-    addToast(`Signed in as ${demoUser.name} (Demo session).`);
-    return { success: true, isDemo: true };
+    usersDb[normalizedEmail] = newDemoUser;
+    saveRegisteredUsers(usersDb);
+
+    const authenticatedUser = {
+      id: newDemoUser.id,
+      name: 'Complete your profile',
+      email: normalizedEmail,
+      username: null,
+      phone: null,
+      role: 'collector',
+      studio: null,
+      isSupabase: false,
+      isProfileIncomplete: true
+    };
+    setUser(authenticatedUser);
+    localStorage.setItem(DEMO_USER_STORAGE_KEY, JSON.stringify(authenticatedUser));
+    addToast('Signed in. Please complete your profile to set your full name.');
+    return { success: true };
   };
 
   // Sign up with Name, Email, Password, and Role
@@ -162,17 +294,36 @@ export const AuthProvider = ({ children }) => {
       return { success: false, error: 'Password must be at least 6 characters long.' };
     }
 
+    const trimmedName = name.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+    const newUserId = 'usr_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+
+    // Save full name directly into persistent user database
+    const usersDb = getRegisteredUsers();
+    usersDb[normalizedEmail] = {
+      id: newUserId,
+      name: trimmedName,
+      email: normalizedEmail,
+      password: password,
+      username: null,
+      phone: null,
+      role: role || 'collector',
+      studio: null,
+      isSupabase: Boolean(isSupabaseConfigured && supabase),
+      createdAt: new Date().toISOString()
+    };
+    saveRegisteredUsers(usersDb);
+
     if (isSupabaseConfigured && supabase) {
       setLoading(true);
       const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
+        email: normalizedEmail,
         password,
         options: {
           data: {
-            full_name: name.trim(),
-            username: email.split('@')[0].toLowerCase(),
+            full_name: trimmedName,
+            name: trimmedName,
             phone: null,
-            phone_verified: false,
             role: role || 'collector'
           }
         }
@@ -183,9 +334,14 @@ export const AuthProvider = ({ children }) => {
         return { success: false, error: error.message };
       }
 
+      if (data.user?.id) {
+        usersDb[normalizedEmail].id = data.user.id;
+        saveRegisteredUsers(usersDb);
+      }
+
       // Check if email confirmation is required by Supabase project settings
       if (data.user && !data.session) {
-        addToast(`Confirmation link sent to ${email}. Please check your inbox.`);
+        addToast(`Confirmation link sent to ${normalizedEmail}. Please check your inbox.`);
         return {
           success: true,
           needsEmailConfirmation: true,
@@ -194,26 +350,32 @@ export const AuthProvider = ({ children }) => {
       }
 
       const appUser = mapSupabaseUser(data.user);
+      appUser.name = trimmedName;
+      appUser.isProfileIncomplete = false;
       setUser(appUser);
       setSession(data.session);
-      addToast(`Account created. Welcome to VEYRA, ${name}.`);
+      localStorage.setItem(DEMO_USER_STORAGE_KEY, JSON.stringify(appUser));
+      addToast(`Account created. Welcome to VEYRA, ${trimmedName}.`);
       return { success: true };
     }
 
-    // Demo fallback when Supabase keys are not yet configured
-    const demoUser = {
-      id: 'demo-' + Date.now(),
-      name,
-      username: email.split('@')[0].toLowerCase(),
+    // Local user database mode
+    const appUser = {
+      id: newUserId,
+      name: trimmedName,
+      email: normalizedEmail,
+      username: null,
       phone: null,
-      phone_verified: false,
-      email,
       role: role || 'collector',
-      isSupabase: false
+      studio: null,
+      isSupabase: false,
+      isProfileIncomplete: false
     };
-    setUser(demoUser);
-    addToast(`Account created for ${name} (Demo session).`);
-    return { success: true, isDemo: true };
+
+    setUser(appUser);
+    localStorage.setItem(DEMO_USER_STORAGE_KEY, JSON.stringify(appUser));
+    addToast(`Account created. Welcome to VEYRA, ${trimmedName}.`);
+    return { success: true };
   };
 
   // Google OAuth Client-side initiation
@@ -250,60 +412,60 @@ export const AuthProvider = ({ children }) => {
       ...user,
       ...updates
     };
+
+    if (updates.name && updates.name.trim() && updates.name !== 'Complete your profile') {
+      updated.isProfileIncomplete = false;
+      updated.name = updates.name.trim();
+    }
+
     setUser(updated);
+    localStorage.setItem(DEMO_USER_STORAGE_KEY, JSON.stringify(updated));
+
+    // Persist changes to registered users database
+    if (updated.email) {
+      const usersDb = getRegisteredUsers();
+      const normEmail = updated.email.toLowerCase().trim();
+      if (usersDb[normEmail]) {
+        usersDb[normEmail] = {
+          ...usersDb[normEmail],
+          ...updates,
+          name: updated.name,
+          username: updates.username !== undefined ? updates.username : usersDb[normEmail].username,
+          phone: updates.phone !== undefined ? updates.phone : usersDb[normEmail].phone,
+          studio: updates.studio !== undefined ? updates.studio : usersDb[normEmail].studio
+        };
+        saveRegisteredUsers(usersDb);
+      }
+    }
 
     if (isSupabaseConfigured && supabase) {
       try {
         await supabase.auth.updateUser({
           data: {
             full_name: updates.name || user?.name,
-            username: updates.username || user?.username,
+            name: updates.name || user?.name,
+            username: updates.username !== undefined ? updates.username : user?.username,
             phone: updates.phone !== undefined ? updates.phone : user?.phone,
-            phone_verified: updates.phone_verified !== undefined ? updates.phone_verified : user?.phone_verified,
-            studio: updates.studio || user?.studio
+            studio: updates.studio !== undefined ? updates.studio : user?.studio
           }
         });
       } catch (err) {
         console.warn('Error saving profile to Supabase:', err);
       }
-    } else {
-      localStorage.setItem(DEMO_USER_STORAGE_KEY, JSON.stringify(updated));
     }
 
     addToast('Account details updated successfully.');
     return { success: true };
   };
 
-  // Save verified phone number (called after successful OTP verification)
-  const updatePhoneVerification = async (phone, verified) => {
-    const updated = { ...user, phone, phone_verified: verified };
-    setUser(updated);
-
-    if (isSupabaseConfigured && supabase) {
-      try {
-        await supabase.auth.updateUser({
-          data: {
-            full_name: user?.name,
-            username: user?.username,
-            phone,
-            phone_verified: verified,
-            studio: user?.studio
-          }
-        });
-      } catch (err) {
-        console.warn('Error saving phone verification to Supabase:', err);
-      }
-    } else {
-      localStorage.setItem(DEMO_USER_STORAGE_KEY, JSON.stringify(updated));
-    }
-
-    return { success: true };
-  };
-
   // Sign out
   const signOut = async () => {
     if (isSupabaseConfigured && supabase) {
-      await supabase.auth.signOut();
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        console.warn('Supabase signOut error:', e);
+      }
     }
     setUser(null);
     setSession(null);
@@ -321,7 +483,6 @@ export const AuthProvider = ({ children }) => {
         signUp,
         signInWithGoogle,
         updateProfile,
-        updatePhoneVerification,
         signOut,
         isAuthenticated: !!user,
         isSupabaseConfigured
@@ -339,3 +500,4 @@ export const useAuth = () => {
   }
   return context;
 };
+
