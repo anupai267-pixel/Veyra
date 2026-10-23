@@ -102,7 +102,7 @@ export const MyProducts = () => {
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { customProducts, updateProductStatus } = useProducts();
-  const { liveAuctions } = useAuctions();
+  const { liveAuctions, approveAuctionLot, rejectAuctionLot } = useAuctions();
   const { orders } = useCart();
   const { getSellerProfile, updateSellerProfile } = useSellerProfile();
 
@@ -610,6 +610,8 @@ export const MyProducts = () => {
                 isLast={idx === filtered.length - 1}
                 liveAuctions={liveAuctions}
                 updateProductStatus={updateProductStatus}
+                approveAuctionLot={approveAuctionLot}
+                rejectAuctionLot={rejectAuctionLot}
               />
             ))}
           </div>
@@ -634,7 +636,7 @@ export const MyProducts = () => {
 };
 
 // Individual product row in the table
-const ProductRow = ({ product, isLast, liveAuctions, updateProductStatus }) => {
+const ProductRow = ({ product, isLast, liveAuctions, updateProductStatus, approveAuctionLot, rejectAuctionLot }) => {
   const liveAuction = liveAuctions.find(a =>
     a.productId === product.id || a.id === product.id || a.id === product.auctionId
   );
@@ -698,13 +700,13 @@ const ProductRow = ({ product, isLast, liveAuctions, updateProductStatus }) => {
           {product.derivedStatus === 'pending' && (
             <div style={{ marginTop: '6px', display: 'flex', gap: '6px' }}>
               <button
-                onClick={() => updateProductStatus(product.id, 'active')}
+                onClick={() => { updateProductStatus(product.id, 'active'); if (approveAuctionLot) approveAuctionLot(product.id); }}
                 style={{ fontSize: '10px', padding: '2px 8px', border: '1px solid var(--badge-shipping-text)', backgroundColor: 'var(--badge-shipping-bg)', color: 'var(--badge-shipping-text)', borderRadius: 'var(--radius-xs)', cursor: 'pointer', fontWeight: 600 }}
               >
                 Approve
               </button>
               <button
-                onClick={() => updateProductStatus(product.id, 'rejected')}
+                onClick={() => { updateProductStatus(product.id, 'rejected'); if (rejectAuctionLot) rejectAuctionLot(product.id); }}
                 style={{ fontSize: '10px', padding: '2px 8px', border: '1px solid rgba(158,58,58,0.3)', backgroundColor: 'rgba(158,58,58,0.07)', color: 'var(--error-color)', borderRadius: 'var(--radius-xs)', cursor: 'pointer', fontWeight: 600 }}
               >
                 Reject
@@ -849,3 +851,4 @@ const SoldProductsList = ({ products }) => {
     </div>
   );
 };
+

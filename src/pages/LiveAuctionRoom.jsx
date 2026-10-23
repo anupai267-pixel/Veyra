@@ -25,6 +25,7 @@ import { useWishlist } from '../context/WishlistContext';
 import { formatINR } from '../data/products';
 import { ProductGallery } from '../components/ProductGallery';
 import { AuctionCallModal } from '../components/AuctionCallModal';
+import { AdminAuctionControls } from '../components/AdminAuctionControls';
 
 export const LiveAuctionRoom = () => {
   const { id } = useParams();
@@ -36,7 +37,7 @@ export const LiveAuctionRoom = () => {
   const { isInWishlist, toggleWishlist } = useWishlist();
 
   // Find authoritative auction
-  const auction = liveAuctions.find((a) => a.id === id) || liveAuctions[0];
+  const auction = liveAuctions.find((a) => a.id === id || a.productId === id) || liveAuctions[0];
 
   const minRequiredBid = auction ? auction.currentBid + auction.minIncrement : 0;
   const [customBid, setCustomBid] = useState('');
@@ -66,7 +67,9 @@ export const LiveAuctionRoom = () => {
     );
   }
 
-  const isLive = auction.remainingSeconds > 0;
+  const isLive = auction.status === 'active' && (auction.remainingSeconds ?? 0) > 0;
+  const isUpcoming = auction.status === 'upcoming';
+  const isEnded = auction.status === 'ended' || (!isLive && !isUpcoming);
   const isFavorited = isInWishlist(auction.productId || auction.id);
 
   // Countdown formatter
@@ -205,6 +208,20 @@ export const LiveAuctionRoom = () => {
                 <span className="dot" />
                 <span>Synchronized Room Live</span>
               </span>
+            ) : isUpcoming ? (
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  letterSpacing: '0.06em',
+                  padding: '3px 8px',
+                  backgroundColor: 'rgba(255, 193, 7, 0.15)',
+                  color: '#856404',
+                  borderRadius: 'var(--radius-xs)'
+                }}
+              >
+                UPCOMING SESSION
+              </span>
             ) : (
               <span
                 style={{
@@ -243,7 +260,10 @@ export const LiveAuctionRoom = () => {
       </div>
 
       {/* THREE-COLUMN AUCTION ROOM CONTAINER */}
-      <div className="container" style={{ paddingTop: '28px' }}>
+      <div className="container" style={{ paddingTop: '20px' }}>
+        {/* Administrator Presentation & Demo Controls */}
+        <AdminAuctionControls auction={auction} />
+
         <div
           style={{
             display: 'grid',
@@ -559,15 +579,25 @@ export const LiveAuctionRoom = () => {
                 {/* Live Countdown Display */}
                 <div
                   style={{
-                    backgroundColor: isLive ? 'rgba(120, 59, 75, 0.08)' : 'var(--surface-secondary)',
-                    border: `1px solid ${isLive ? 'rgba(120, 59, 75, 0.25)' : 'var(--border-color)'}`,
+                    backgroundColor: isLive
+                      ? 'rgba(120, 59, 75, 0.08)'
+                      : isUpcoming
+                      ? 'rgba(255, 193, 7, 0.12)'
+                      : 'var(--surface-secondary)',
+                    border: `1px solid ${
+                      isLive
+                        ? 'rgba(120, 59, 75, 0.25)'
+                        : isUpcoming
+                        ? 'rgba(255, 193, 7, 0.35)'
+                        : 'var(--border-color)'
+                    }`,
                     borderRadius: 'var(--radius-xs)',
                     padding: '8px 14px',
                     textAlign: 'right'
                   }}
                 >
                   <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-secondary)', display: 'block' }}>
-                    {isLive ? 'Time Remaining' : 'Auction State'}
+                    {isLive ? 'Time Remaining' : isUpcoming ? 'Bidding Opens In' : 'Auction State'}
                   </span>
                   <div
                     style={{
@@ -576,7 +606,7 @@ export const LiveAuctionRoom = () => {
                       gap: '6px',
                       fontSize: '15px',
                       fontWeight: 700,
-                      color: isLive ? 'var(--accent-burgundy)' : 'var(--text-primary)',
+                      color: isLive ? 'var(--accent-burgundy)' : isUpcoming ? '#856404' : 'var(--text-primary)',
                       fontVariantNumeric: 'tabular-nums'
                     }}
                   >
@@ -732,6 +762,27 @@ export const LiveAuctionRoom = () => {
                     Bids are legally binding and synchronized across all Veyra trading terminals.
                   </p>
                 </form>
+              ) : isUpcoming ? (
+                /* Auction Upcoming Scheduled State */
+                <div
+                  style={{
+                    backgroundColor: 'var(--bg-primary)',
+                    border: '1.5px solid var(--border-color)',
+                    borderRadius: 'var(--radius-xs)',
+                    padding: '24px',
+                    textAlign: 'center'
+                  }}
+                >
+                  <Clock size={32} color="var(--accent-burgundy)" style={{ margin: '0 auto 10px' }} />
+                  <h3 style={{ fontSize: '1.3rem', marginBottom: '6px' }}>Auction Scheduled — Opens Soon</h3>
+                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                    This lot opens in <strong>{formatCountdown(auction.remainingSeconds)}</strong>. Starting bid is set at <strong>{formatINR(auction.startingBid)}</strong>.
+                  </p>
+                  <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: 0 }}>
+                    <ShieldCheck size={13} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} />
+                    Terminal bidding controls will activate automatically as soon as the floor countdown concludes.
+                  </p>
+                </div>
               ) : (
                 /* Auction Concluded State */
                 <div

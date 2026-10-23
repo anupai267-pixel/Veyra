@@ -13,6 +13,7 @@ import {
 import { useAuctions } from '../context/AuctionContext';
 import { useWishlist } from '../context/WishlistContext';
 import { formatINR } from '../data/products';
+import { AdminAuctionControls } from '../components/AdminAuctionControls';
 
 export const LiveAuctions = () => {
   const { liveAuctions } = useAuctions();
@@ -35,9 +36,11 @@ export const LiveAuctions = () => {
     return Array.from(set);
   }, [liveAuctions]);
 
-  // Authoritative filter: ONLY auctions that are currently active (remainingSeconds > 0)
+  // Authoritative filter: ONLY auctions that are currently active (status active and remainingSeconds > 0)
   const activeLots = useMemo(() => {
-    let result = liveAuctions.filter((auc) => (auc.remainingSeconds ?? 0) > 0);
+    let result = liveAuctions.filter(
+      (auc) => (auc.status === 'active' || (!auc.status && (auc.endsInSeconds || 0) > 0)) && (auc.remainingSeconds ?? 0) > 0
+    );
 
     // Category filter
     if (selectedCategory !== 'all') {
@@ -118,6 +121,9 @@ export const LiveAuctions = () => {
             Bidding in real time for single-edition masterworks, authenticated archival furniture, and living art. Only lots with active server clocks are displayed.
           </p>
         </div>
+
+        {/* Global Demo Presentation Admin Bar */}
+        <AdminAuctionControls isGlobal={true} />
 
         {/* Independent Live Auctions Filter Bar */}
         <div
