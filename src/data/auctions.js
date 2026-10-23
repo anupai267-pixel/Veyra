@@ -1,5 +1,7 @@
 // VEYRA Live & Upcoming Curated Auctions
 
+export const DEMO_AUCTION_IDS = ['auc-1', 'auc-2', 'auc-3', 'auc-4'];
+
 export const INITIAL_LIVE_AUCTIONS = [
   {
     id: 'auc-1',
@@ -202,3 +204,11 @@ export const UPCOMING_AUCTIONS = [
     description: 'Molten bronze cast into riverbed sand molds with hand-patinated verdigris finish. Organic perimeter evocative of natural river stones.'
   }
 ];
+
+// Baseline snapshot of demo auctions used for presentation resets
+export const INITIAL_LIVE_AUCTIONS_BASELINE = JSON.parse(JSON.stringify(INITIAL_LIVE_AUCTIONS));
+
+export const getDemoBaselineAuction = (auctionId) => {
+  const item = INITIAL_LIVE_AUCTIONS.find((a) => a.id === auctionId);
+  return item ? JSON.parse(JSON.stringify(item)) : null;
+};

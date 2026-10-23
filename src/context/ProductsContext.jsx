@@ -34,15 +34,14 @@ export const ProductsProvider = ({ children }) => {
       featured: false,
       inStock: true,
       condition: productData.condition || 'Studio Mint Original',
-      availability: 'In Stock — Studio Direct',
-      listingStatus: 'pending',
+      availability: 'In Stock â€¢ Studio Direct',
+      listingStatus: productData.listingStatus || 'pending',
       listedAt: new Date().toISOString(),
       images: productData.images && productData.images.length > 0
         ? productData.images
         : [productData.image]
     };
     setCustomProducts((prev) => [newProduct, ...prev]);
-    addToast(`"${newProduct.name}" listed successfully in the catalog.`);
     return newProduct;
   };
 
@@ -53,14 +52,45 @@ export const ProductsProvider = ({ children }) => {
   // Get all products listed by a specific user (by user.id as sellerId)
   const getMyProducts = (userId) => {
     if (!userId) return [];
-    return customProducts.filter(p => p.sellerId === userId);
+    return customProducts.filter((p) => p.sellerId === userId);
   };
 
   // Update the listing status of a custom product
   const updateProductStatus = (productId, status) => {
-    setCustomProducts(prev =>
-      prev.map(p => p.id === productId ? { ...p, listingStatus: status } : p)
+    setCustomProducts((prev) =>
+      prev.map((p) => (p.id === productId ? { ...p, listingStatus: status } : p))
     );
+
+    // Also synchronize status with any corresponding auction in customAuctions
+    try {
+      const savedAuctions = localStorage.getItem('veyra_custom_auctions');
+      if (savedAuctions) {
+        const parsed = JSON.parse(savedAuctions);
+        const now = Date.now();
+        const updated = parsed.map((a) => {
+          if (a.productId === productId || a.id === productId) {
+            const isApproved = status === 'active';
+            const isRejected = status === 'rejected';
+            const newApproval = isApproved ? 'approved' : isRejected ? 'rejected' : 'pending';
+            const isStarted = now >= a.scheduledTimestamp;
+            const isEnded = now >= a.endTimestamp;
+            const newStatus = !isApproved
+              ? newApproval
+              : isEnded
+              ? 'ended'
+              : isStarted
+              ? 'active'
+              : 'scheduled';
+            return { ...a, approvalStatus: newApproval, status: newStatus };
+          }
+          return a;
+        });
+        localStorage.setItem('veyra_custom_auctions', JSON.stringify(updated));
+        window.dispatchEvent(new Event('storage'));
+      }
+    } catch (e) {
+      console.warn('Failed to sync auction approval status', e);
+    }
   };
 
   return (
