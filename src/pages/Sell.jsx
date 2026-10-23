@@ -23,14 +23,17 @@ import {
   Lock,
   Tag,
   MapPin,
-  Sparkles
+  Sparkles,
+  Bot,
+  XCircle,
+  RotateCcw
 } from 'lucide-react';
 
 const MAX_IMAGES = 6;
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
-// Curated image presets for easy high-resolution demonstrations
+// Curated image presets for high-resolution demonstrations
 const CURATED_IMAGE_PRESETS = [
   {
     label: 'Studio Teak & Cane Chair',
@@ -52,7 +55,7 @@ const CURATED_IMAGE_PRESETS = [
 
 export const Sell = () => {
   const navigate = useNavigate();
-  const { addProduct, customProducts } = useProducts();
+  const { addProduct } = useProducts();
   const { createAuctionLot } = useAuctions();
   const { user } = useAuth();
 
@@ -66,12 +69,18 @@ export const Sell = () => {
     return 'Studio Atelier';
   }, [user]);
 
-  // Default start date (tomorrow) and start time (18:00)
-  const defaultStartDate = useMemo(() => {
-    const d = new Date(Date.now() + 86400000);
-    return d.toISOString().split('T')[0];
+  // Default dates in Asia/Kolkata
+  const { defaultStartDate, defaultEndDate } = useMemo(() => {
+    const start = new Date(Date.now() + 86400000);
+    const end = new Date(Date.now() + 86400000 * 4);
+    return {
+      defaultStartDate: start.toISOString().split('T')[0],
+      defaultEndDate: end.toISOString().split('T')[0]
+    };
   }, []);
+
   const defaultStartTime = '18:00';
+  const defaultEndTime = '18:00';
 
   // Toggle between Marketplace Sale ('direct') and Live Auction Lot ('auction')
   const [listingType, setListingType] = useState('auction');
@@ -82,16 +91,26 @@ export const Sell = () => {
     seller: defaultSellerName,
     location: 'Chandigarh, India',
     category: 'Handmade',
-    price: 45000,          // Estimated Lot Value in INR (or direct price)
+    brand: 'Pierre Jeanneret Workshop',
+    model: 'PJ-SI-028-A',
+    condition: 'Pristine Museum Restored',
+    age: 'c. 1956',
+    price: 45000,          // Estimated Lot Value in INR
     startingBid: 28000,    // Starting Bid in INR
+    minIncrement: 500,     // Seller configured minimum bid increment
     startDate: defaultStartDate,
     startTime: defaultStartTime,
-    durationDays: 3,       // Duration in Days (supports decimals e.g. 0.5, 1, 2.5, 3)
+    endDate: defaultEndDate,
+    endTime: defaultEndTime,
     description: 'Original solid Burma teak framework with renewed hand-woven natural cane seating. Features documented stenciled archival inventory markings on the rear apron.',
     materials: 'Aged reclaimed Burma teak, natural hand-woven cane',
     dimensions: '78cm H × 51cm W × 54cm D',
     provenance: 'Certified masterwork from Chandigarh architectural restoration',
-    condition: 'Pristine Museum Restored'
+    features: 'V-leg floating architecture, authentic stenciled inventory marks',
+    specifications: 'Solid teak mortise and tenon joinery, natural cane weave',
+    accessories: 'Certificate of Archival Authenticity included',
+    defects: 'Authentic historic surface patina consistent with 1950s architectural usage',
+    authenticity: 'Authenticated against European Design Council archives'
   });
 
   // Images state (up to 6 images)
@@ -105,6 +124,28 @@ export const Sell = () => {
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedData, setSubmittedData] = useState(null);
+
+  // AI Description Generator Modal State
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [aiDetails, setAiDetails] = useState({
+    name: '',
+    category: '',
+    brand: '',
+    model: '',
+    condition: '',
+    age: '',
+    materials: '',
+    dimensions: '',
+    features: '',
+    specifications: '',
+    accessories: '',
+    defects: '',
+    authenticity: '',
+    provenance: ''
+  });
+  const [aiGeneratedText, setAiGeneratedText] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
 
   // Keep seller updated if user profile loads asynchronously
   useEffect(() => {
@@ -120,19 +161,20 @@ export const Sell = () => {
     if (formError) setFormError('');
   };
 
-  // Automatically calculate end date and time based on start date, time, and duration
+  // Authoritative calculated schedule in Asia/Kolkata
   const calculatedSchedule = useMemo(() => {
-    if (!formData.startDate || !formData.startTime || !formData.durationDays) {
+    if (!formData.startDate || !formData.startTime || !formData.endDate || !formData.endTime) {
       return null;
     }
-    const durationNum = parseFloat(formData.durationDays);
-    if (isNaN(durationNum) || durationNum <= 0) return null;
 
     const startDateTime = new Date(`${formData.startDate}T${formData.startTime}`);
-    if (isNaN(startDateTime.getTime())) return null;
+    const endDateTime = new Date(`${formData.endDate}T${formData.endTime}`);
 
-    const endDateTime = new Date(startDateTime.getTime() + Math.round(durationNum * 86400000));
+    if (isNaN(startDateTime.getTime()) || isNaN(endDateTime.getTime())) return null;
+
     const isPast = startDateTime.getTime() <= Date.now();
+    const isEndBeforeStart = endDateTime.getTime() <= startDateTime.getTime();
+    const durationHours = Math.round((endDateTime.getTime() - startDateTime.getTime()) / 3600000);
 
     const formatDateString = (d) =>
       d.toLocaleDateString('en-GB', {
@@ -153,13 +195,14 @@ export const Sell = () => {
       startDateTime,
       endDateTime,
       isPast,
+      isEndBeforeStart,
       startFormatted: `${formatDateString(startDateTime)} • ${formatTimeString(startDateTime)} IST`,
       endFormatted: `${formatDateString(endDateTime)} • ${formatTimeString(endDateTime)} IST`,
-      durationHours: Math.round(durationNum * 24)
+      durationHours: Math.max(0, durationHours)
     };
-  }, [formData.startDate, formData.startTime, formData.durationDays]);
+  }, [formData.startDate, formData.startTime, formData.endDate, formData.endTime]);
 
-  // Handle file uploads with type & size validation
+  // Handle file uploads with validation
   const handleFileSelect = (e) => {
     setImageError('');
     const files = Array.from(e.target.files || []);
@@ -210,10 +253,78 @@ export const Sell = () => {
     setCustomImageUrl('');
   };
 
-  // Remove individual image
+  // Remove photo
   const handleRemoveImage = (indexToRemove) => {
     setImages((prev) => prev.filter((_, idx) => idx !== indexToRemove));
     setImageError('');
+  };
+
+  // Open AI Generator Modal and synchronize current form data
+  const handleOpenAiModal = () => {
+    setAiDetails({
+      name: formData.name || '',
+      category: formData.category || '',
+      brand: formData.brand || formData.seller || '',
+      model: formData.model || '',
+      condition: formData.condition || '',
+      age: formData.age || '',
+      materials: formData.materials || '',
+      dimensions: formData.dimensions || '',
+      features: formData.features || '',
+      specifications: formData.specifications || '',
+      accessories: formData.accessories || '',
+      defects: formData.defects || '',
+      authenticity: formData.authenticity || '',
+      provenance: formData.provenance || ''
+    });
+    setAiGeneratedText(formData.description || '');
+    setAiError('');
+    setShowAiModal(true);
+  };
+
+  // Trigger AI Description Generation via backend OpenAI endpoint
+  const handleGenerateAiDescription = async () => {
+    setAiLoading(true);
+    setAiError('');
+
+    try {
+      const response = await fetch('/api/ai/generate-description', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(aiDetails)
+      });
+
+      const data = await response.json();
+      if (data.success && data.description) {
+        setAiGeneratedText(data.description);
+      } else {
+        setAiError(data.error || 'Failed to generate description with OpenAI.');
+      }
+    } catch (err) {
+      setAiError('Could not reach backend AI service. You can write your description manually.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // Apply reviewed AI description to the form
+  const handleApplyAiDescription = () => {
+    if (aiGeneratedText.trim()) {
+      setFormData((prev) => ({
+        ...prev,
+        description: aiGeneratedText.trim(),
+        brand: aiDetails.brand || prev.brand,
+        model: aiDetails.model || prev.model,
+        condition: aiDetails.condition || prev.condition,
+        age: aiDetails.age || prev.age,
+        features: aiDetails.features || prev.features,
+        specifications: aiDetails.specifications || prev.specifications,
+        accessories: aiDetails.accessories || prev.accessories,
+        defects: aiDetails.defects || prev.defects,
+        authenticity: aiDetails.authenticity || prev.authenticity
+      }));
+    }
+    setShowAiModal(false);
   };
 
   // Main Form Submission Handler
@@ -221,14 +332,12 @@ export const Sell = () => {
     e.preventDefault();
     setFormError('');
 
-    // 1. Authentication check
     if (!user) {
       setFormError('You must be signed in with an artisan account to publish listings on Veyra.');
       navigate('/signin?redirect=/sell');
       return;
     }
 
-    // 2. Specifications validation
     if (!formData.name.trim()) {
       setFormError('Please provide an authoritative product title.');
       return;
@@ -252,74 +361,83 @@ export const Sell = () => {
 
     const priceNum = Number(formData.price);
 
-    // 3. Auction specific validation
+    // Auction-specific validation
     if (listingType === 'auction') {
       const startingBidNum = Number(formData.startingBid);
+      const minIncNum = Number(formData.minIncrement);
+
       if (isNaN(startingBidNum) || startingBidNum <= 0) {
         setFormError('Starting bid must be a valid positive amount in INR.');
+        return;
+      }
+      if (isNaN(minIncNum) || minIncNum <= 0) {
+        setFormError('Minimum bid increment must be a positive amount in INR (e.g. ₹50 or ₹100).');
         return;
       }
       if (startingBidNum > priceNum) {
         setFormError('Starting bid cannot exceed the estimated lot value.');
         return;
       }
-      if (!formData.startDate || !formData.startTime) {
-        setFormError('Please provide an auction start date and time.');
+      if (!formData.startDate || !formData.startTime || !formData.endDate || !formData.endTime) {
+        setFormError('Please provide both auction start date/time and end date/time.');
         return;
       }
-      if (calculatedSchedule && calculatedSchedule.isPast) {
-        setFormError('Auction start date and time cannot be in the past. Please schedule a future time.');
-        return;
-      }
-      const durationNum = parseFloat(formData.durationDays);
-      if (isNaN(durationNum) || durationNum <= 0) {
-        setFormError('Auction duration must be at least 0.1 days.');
-        return;
+      if (calculatedSchedule) {
+        if (calculatedSchedule.isEndBeforeStart) {
+          setFormError('Auction end time must be strictly later than the start time.');
+          return;
+        }
+        if (calculatedSchedule.isPast) {
+          setFormError('Auction start time cannot be in the past. Please schedule a future time.');
+          return;
+        }
       }
     }
 
-    // Prevent duplicate submission
     setIsSubmitting(true);
 
     try {
-      // 1. Create product record in Products catalog
       const productPayload = {
         name: formData.name.trim(),
         seller: formData.seller.trim(),
-        sellerId: user.id, // Enforce authenticated seller identity
+        sellerId: user.id,
         location: formData.location.trim() || 'Studio Atelier',
         category: formData.category,
+        brand: formData.brand.trim(),
+        model: formData.model.trim(),
+        condition: formData.condition,
         price: priceNum,
         isAuction: listingType === 'auction',
         startingBid: listingType === 'auction' ? Number(formData.startingBid) : undefined,
+        minIncrement: listingType === 'auction' ? Number(formData.minIncrement) : undefined,
         images: images,
         image: images[0],
         description: formData.description.trim(),
         materials: formData.materials.trim(),
         dimensions: formData.dimensions.trim(),
         provenance: formData.provenance.trim(),
-        condition: formData.condition || 'Pristine Studio Original',
-        listingStatus: 'pending' // Mandatory pending approval
+        listingStatus: 'active'
       };
 
       const createdProduct = addProduct(productPayload);
 
-      // 2. If auction format, create and schedule lot in AuctionContext
       let createdAuction = null;
       if (listingType === 'auction') {
         const auctionPayload = {
           productId: createdProduct.id,
           name: formData.name.trim(),
           seller: formData.seller.trim(),
-          maker: formData.seller.trim(),
+          maker: formData.brand.trim() || formData.seller.trim(),
           sellerId: user.id,
           location: formData.location.trim() || 'Studio Atelier',
           category: formData.category,
           startingBid: Number(formData.startingBid),
           estimatedValue: priceNum,
+          minIncrement: Number(formData.minIncrement || 100),
           startDate: formData.startDate,
           startTime: formData.startTime,
-          durationDays: parseFloat(formData.durationDays),
+          endDate: formData.endDate,
+          endTime: formData.endTime,
           images: images,
           image: images[0],
           description: formData.description.trim(),
@@ -329,7 +447,7 @@ export const Sell = () => {
           condition: formData.condition || 'Pristine Studio Original'
         };
 
-        const auctionOutcome = createAuctionLot(auctionPayload);
+        const auctionOutcome = await createAuctionLot(auctionPayload);
         if (!auctionOutcome.success) {
           throw new Error(auctionOutcome.error || 'Failed to register auction lot with scheduler.');
         }
@@ -343,7 +461,7 @@ export const Sell = () => {
       });
     } catch (err) {
       console.error('Submission error:', err);
-      setFormError(err.message || 'An error occurred while saving your listing. Please try again.');
+      setFormError(err.message || 'An error occurred while saving your listing.');
     } finally {
       setIsSubmitting(false);
     }
@@ -360,163 +478,115 @@ export const Sell = () => {
       startingBid: '',
       description: ''
     }));
-    setImages([]);
   };
 
-  return (
-    <div style={{ paddingTop: '36px', paddingBottom: '96px', backgroundColor: 'var(--bg-primary)' }}>
-      <div className="container" style={{ maxWidth: '1240px' }}>
+  // Success view
+  if (submittedData) {
+    const isAuc = submittedData.listingType === 'auction';
+    const lotId = submittedData.auction?.id;
 
-        {/* Page Header */}
-        <div style={{ marginBottom: '32px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-            <span className="eyebrow" style={{ letterSpacing: '0.12em' }}>
-              ATELIER WORKSHOP PORTAL
-            </span>
-          </div>
-          <h1
-            style={{
-              fontFamily: 'var(--font-serif)',
-              fontSize: 'clamp(2.2rem, 3.8vw, 3rem)',
-              lineHeight: 1.15,
-              fontWeight: 500,
-              color: 'var(--text-primary)',
-              margin: '0 0 10px 0'
-            }}
-          >
-            Live Auction Listing
-          </h1>
-          <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)', maxWidth: '640px', margin: 0, lineHeight: 1.55 }}>
-            Submit studio ceramics, cast bronzes, archival monotypes, and living art for curated live auction scheduling and collector bidding.
-          </p>
-        </div>
-
-        {/* Authentication Notice if Guest */}
-        {!user && (
+    return (
+      <div style={{ paddingTop: '56px', paddingBottom: '96px', backgroundColor: 'var(--bg-primary)' }}>
+        <div className="container" style={{ maxWidth: '640px', textAlign: 'center' }}>
           <div
-            style={{
-              backgroundColor: '#FFFFFF',
-              border: '1.5px solid var(--accent-burgundy)',
-              borderRadius: 'var(--radius-xs)',
-              padding: '20px 24px',
-              marginBottom: '32px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '16px',
-              flexWrap: 'wrap'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-              <div
-                style={{
-                  width: '44px',
-                  height: '44px',
-                  borderRadius: '50%',
-                  backgroundColor: 'var(--surface-secondary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--accent-burgundy)',
-                  flexShrink: 0
-                }}
-              >
-                <Lock size={20} />
-              </div>
-              <div>
-                <h4 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600 }}>Artisan Account Required</h4>
-                <p style={{ margin: '3px 0 0 0', fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>
-                  You are currently browsing as a guest. Please sign in or register to publish items and schedule live auctions.
-                </p>
-              </div>
-            </div>
-            <Link to="/signin?redirect=/sell" className="btn btn-burgundy btn-sm">
-              <span>Sign In to Atelier</span>
-              <ArrowRight size={14} />
-            </Link>
-          </div>
-        )}
-
-        {/* Success Confirmation Card */}
-        {submittedData && (
-          <div
-            style={{
-              backgroundColor: '#FFFFFF',
-              border: '1.5px solid var(--accent-burgundy)',
-              borderRadius: 'var(--radius-xs)',
-              padding: '28px 32px',
-              marginBottom: '36px',
-              boxShadow: '0 4px 16px rgba(120, 59, 75, 0.08)'
-            }}
-          >
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-              <CheckCircle2 size={28} color="var(--success-color)" style={{ flexShrink: 0, marginTop: '2px' }} />
-              <div style={{ flex: 1 }}>
-                <h3 style={{ fontSize: '1.4rem', fontFamily: 'var(--font-serif)', margin: '0 0 6px 0', color: 'var(--text-primary)' }}>
-                  {submittedData.listingType === 'auction'
-                    ? 'Live Auction Lot Submitted for Approval!'
-                    : 'Marketplace Listing Submitted for Approval!'}
-                </h3>
-                <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 18px 0' }}>
-                  <strong>"{submittedData.product.name}"</strong> has been successfully registered and queued for atelier curator review with status{' '}
-                  <span style={{ fontWeight: 600, color: 'var(--accent-burgundy)' }}>Pending Approval</span>. Once reviewed, it will be automatically published to the upcoming auction schedule.
-                </p>
-
-                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                  <Link to="/my-products" className="btn btn-burgundy" style={{ height: '40px', padding: '0 20px', fontSize: '12.5px' }}>
-                    <Store size={15} />
-                    <span>View Your Atelier Listings</span>
-                  </Link>
-                  <button
-                    onClick={handleResetForm}
-                    className="btn btn-secondary"
-                    style={{ height: '40px', padding: '0 20px', fontSize: '12.5px' }}
-                  >
-                    <span>Submit Another Lot</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Main Two-Column Layout */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1.25fr) minmax(320px, 0.85fr)',
-            gap: '36px',
-            alignItems: 'flex-start'
-          }}
-          className="sell-page-grid"
-        >
-
-          {/* LEFT COLUMN: Listing Form */}
-          <form
-            onSubmit={handleSubmit}
             style={{
               backgroundColor: '#FFFFFF',
               border: '1px solid var(--border-color)',
               borderRadius: 'var(--radius-xs)',
-              padding: 'clamp(24px, 3.5vw, 36px)',
-              boxShadow: '0 1px 4px rgba(0, 0, 0, 0.02)'
+              padding: 'clamp(28px, 5vw, 44px)',
+              boxShadow: 'var(--shadow-sm)'
             }}
           >
+            <div
+              style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(120, 59, 75, 0.08)',
+                color: 'var(--accent-burgundy)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 20px auto'
+              }}
+            >
+              <CheckCircle2 size={30} />
+            </div>
 
-            {/* SECTION A: Object Specifications */}
+            <span className="eyebrow" style={{ marginBottom: '6px' }}>
+              Submission Confirmed
+            </span>
+
+            <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(1.8rem, 3vw, 2.3rem)', marginBottom: '14px', color: 'var(--text-primary)' }}>
+              {isAuc ? 'Auction Lot Scheduled' : 'Item Published to Catalogue'}
+            </h1>
+
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: '24px' }}>
+              Your item <strong>"{submittedData.product.name}"</strong> has been registered in the catalog and the live floor schedule.
+            </p>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              {isAuc && lotId && (
+                <Link to={`/live/${lotId}`} className="btn btn-burgundy">
+                  <Hammer size={15} />
+                  <span>Enter Floor Room</span>
+                </Link>
+              )}
+              <Link to="/my-products" className="btn btn-secondary">
+                <Store size={15} />
+                <span>Manage My Listings</span>
+              </Link>
+              <button onClick={handleResetForm} className="btn btn-secondary">
+                <Plus size={15} />
+                <span>Create Another Listing</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ paddingTop: '40px', paddingBottom: '96px', backgroundColor: 'var(--bg-primary)' }}>
+      <div className="container" style={{ maxWidth: '820px' }}>
+        {/* Header */}
+        <div style={{ marginBottom: '32px' }}>
+          <span className="eyebrow" style={{ marginBottom: '6px' }}>
+            Artisan Atelier Portal
+          </span>
+          <h1 style={{ fontSize: 'clamp(2.1rem, 3.8vw, 3rem)', marginBottom: '8px', color: 'var(--text-primary)' }}>
+            List Masterwork or Live Auction Lot
+          </h1>
+          <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            Publish authenticated works for direct collector acquisition or register for synchronized live floor bidding.
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-xs)',
+              padding: 'clamp(22px, 4vw, 36px)',
+              boxShadow: 'var(--shadow-xs)'
+            }}
+          >
+            {/* SECTION A: Object Classification & Basic Details */}
             <div style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '24px', marginBottom: '28px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '18px' }}>
                 <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.45rem', fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>
-                  Object Specifications
+                  Listing Format & Basic Details
                 </h2>
 
-                {/* Toggle: Marketplace Sale vs Live Auction Lot */}
+                {/* Format Toggle Pill */}
                 <div
                   style={{
                     display: 'inline-flex',
-                    backgroundColor: 'var(--bg-primary)',
-                    padding: '3px',
+                    backgroundColor: 'var(--surface-secondary)',
                     borderRadius: 'var(--radius-xs)',
+                    padding: '3px',
                     border: '1px solid var(--border-color)'
                   }}
                 >
@@ -524,7 +594,7 @@ export const Sell = () => {
                     type="button"
                     onClick={() => setListingType('direct')}
                     style={{
-                      display: 'inline-flex',
+                      display: 'flex',
                       alignItems: 'center',
                       gap: '6px',
                       padding: '6px 14px',
@@ -533,20 +603,20 @@ export const Sell = () => {
                       borderRadius: 'var(--radius-xs)',
                       border: 'none',
                       cursor: 'pointer',
-                      backgroundColor: listingType === 'direct' ? '#191919' : 'transparent',
+                      backgroundColor: listingType === 'direct' ? 'var(--accent-burgundy)' : 'transparent',
                       color: listingType === 'direct' ? '#FFFFFF' : 'var(--text-secondary)',
                       transition: 'all 120ms ease'
                     }}
                   >
                     <ShoppingBag size={13} />
-                    <span>Marketplace Sale</span>
+                    <span>Direct Sale</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setListingType('auction')}
                     style={{
-                      display: 'inline-flex',
+                      display: 'flex',
                       alignItems: 'center',
                       gap: '6px',
                       padding: '6px 14px',
@@ -599,7 +669,7 @@ export const Sell = () => {
                     placeholder="e.g. Studio Pierre Jeanneret"
                     required
                   />
-                  <span style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginTop: '3px' }}>
+                  <span style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginTop: '3px', display: 'block' }}>
                     Populated from your authenticated artisan profile
                   </span>
                 </div>
@@ -644,7 +714,7 @@ export const Sell = () => {
 
                 <div className="form-group">
                   <label className="form-label" htmlFor="price">
-                    {listingType === 'auction' ? 'Estimated Lot Value (₹) *' : 'Marketplace Price (₹) *'}
+                    {listingType === 'auction' ? 'Estimated Lot Value / Reserve (₹) *' : 'Marketplace Price (₹) *'}
                   </label>
                   <input
                     id="price"
@@ -658,7 +728,7 @@ export const Sell = () => {
                     placeholder="e.g. 45000"
                     required
                   />
-                  <span style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginTop: '3px' }}>
+                  <span style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginTop: '3px', display: 'block' }}>
                     Authoritative catalog appraisal benchmark
                   </span>
                 </div>
@@ -679,11 +749,11 @@ export const Sell = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                   <Gavel size={17} color="var(--accent-burgundy)" />
                   <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.25rem', fontWeight: 600, margin: 0, color: 'var(--accent-burgundy)' }}>
-                    Auction Configuration
+                    Auction Configuration & Date Management (Asia/Kolkata)
                   </h3>
                 </div>
 
-                {/* Starting Bid & Duration in Days */}
+                {/* Starting Bid & Seller Min Increment */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label" htmlFor="startingBid">
@@ -701,36 +771,35 @@ export const Sell = () => {
                       placeholder="e.g. 28000"
                       required={listingType === 'auction'}
                     />
-                    <span style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginTop: '3px' }}>
+                    <span style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginTop: '3px', display: 'block' }}>
                       Minimum valid opening bid required
                     </span>
                   </div>
 
                   <div className="form-group" style={{ margin: 0 }}>
-                    <label className="form-label" htmlFor="durationDays">
-                      Auction Duration (Days) *
+                    <label className="form-label" htmlFor="minIncrement">
+                      Seller Minimum Bid Increment (₹) *
                     </label>
                     <input
-                      id="durationDays"
-                      name="durationDays"
+                      id="minIncrement"
+                      name="minIncrement"
                       type="number"
-                      step="0.5"
-                      min="0.1"
-                      max="30"
+                      step="50"
+                      min="50"
                       className="form-input"
-                      value={formData.durationDays}
+                      value={formData.minIncrement}
                       onChange={handleInputChange}
-                      placeholder="e.g. 3 (or 0.5 for 12 hours)"
+                      placeholder="e.g. 50, 100, 500"
                       required={listingType === 'auction'}
                     />
-                    <span style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginTop: '3px' }}>
-                      Supports decimals (e.g. 0.5 for 12h, 1, 2.5, 3 days)
+                    <span style={{ fontSize: '10.5px', color: 'var(--text-secondary)', marginTop: '3px', display: 'block' }}>
+                      Enforced on all manual and Auto-Bid counter-bids
                     </span>
                   </div>
                 </div>
 
-                {/* Start Date & Start Time */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '18px' }}>
+                {/* Start Date & Time */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label" htmlFor="startDate">
                       Auction Start Date *
@@ -763,12 +832,48 @@ export const Sell = () => {
                   </div>
                 </div>
 
-                {/* Automatically Calculated End Date & Time Display Card */}
+                {/* End Date & Time */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '18px' }}>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label" htmlFor="endDate">
+                      Auction End Date *
+                    </label>
+                    <input
+                      id="endDate"
+                      name="endDate"
+                      type="date"
+                      min={formData.startDate || new Date().toISOString().split('T')[0]}
+                      className="form-input"
+                      value={formData.endDate}
+                      onChange={handleInputChange}
+                      required={listingType === 'auction'}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label" htmlFor="endTime">
+                      Auction End Time *
+                    </label>
+                    <input
+                      id="endTime"
+                      name="endTime"
+                      type="time"
+                      className="form-input"
+                      value={formData.endTime}
+                      onChange={handleInputChange}
+                      required={listingType === 'auction'}
+                    />
+                  </div>
+                </div>
+
+                {/* Calculated Schedule Summary Card */}
                 {calculatedSchedule && (
                   <div
                     style={{
                       backgroundColor: '#FFFFFF',
-                      border: calculatedSchedule.isPast ? '1px solid var(--error-color)' : '1px dashed var(--accent-burgundy)',
+                      border: calculatedSchedule.isPast || calculatedSchedule.isEndBeforeStart
+                        ? '1px solid var(--error-color)'
+                        : '1px dashed var(--accent-burgundy)',
                       borderRadius: 'var(--radius-xs)',
                       padding: '12px 16px',
                       display: 'flex',
@@ -778,19 +883,26 @@ export const Sell = () => {
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                       <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, color: 'var(--accent-burgundy)' }}>
-                        Calculated Schedule Summary
+                        Authoritative Schedule Summary (Asia/Kolkata)
                       </span>
                       <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                        {calculatedSchedule.durationHours} Hours Total
+                        {calculatedSchedule.durationHours} Hours Duration
                       </span>
                     </div>
 
                     <div style={{ fontSize: '12.5px', color: 'var(--text-primary)', marginTop: '2px' }}>
-                      <strong>Opening:</strong> {calculatedSchedule.startFormatted}
+                      <strong>Floor Opens:</strong> {calculatedSchedule.startFormatted}
                     </div>
                     <div style={{ fontSize: '12.5px', color: 'var(--text-primary)' }}>
-                      <strong>Closing:</strong> {calculatedSchedule.endFormatted}
+                      <strong>Floor Closes:</strong> {calculatedSchedule.endFormatted}
                     </div>
+
+                    {calculatedSchedule.isEndBeforeStart && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--error-color)', fontSize: '11.5px', marginTop: '4px' }}>
+                        <AlertCircle size={13} />
+                        <span>Closing time must be strictly later than opening time.</span>
+                      </div>
+                    )}
 
                     {calculatedSchedule.isPast && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--error-color)', fontSize: '11.5px', marginTop: '4px' }}>
@@ -817,7 +929,7 @@ export const Sell = () => {
                 Upload up to 6 high-resolution photographs. The first photo will be presented as the main catalog image.
               </p>
 
-              {/* Selected Images Thumbnail Strip */}
+              {/* Selected Images Strip */}
               {images.length > 0 && (
                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '16px' }}>
                   {images.map((imgUrl, idx) => (
@@ -885,7 +997,7 @@ export const Sell = () => {
                 </div>
               )}
 
-              {/* Upload & Add Photo Controls */}
+              {/* Upload Controls */}
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '14px' }}>
                 <input
                   ref={fileInputRef}
@@ -937,7 +1049,7 @@ export const Sell = () => {
                 </div>
               </div>
 
-              {/* Quick Preset Selector */}
+              {/* Presets */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Presets:</span>
                 {CURATED_IMAGE_PRESETS.map((preset, idx) => (
@@ -971,11 +1083,30 @@ export const Sell = () => {
               )}
             </div>
 
-            {/* SECTION D: Craftsmanship & Additional Specifications */}
+            {/* SECTION D: Craftsmanship & AI Description Generator */}
             <div style={{ marginBottom: '24px' }}>
-              <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.45rem', fontWeight: 600, margin: '0 0 16px 0', color: 'var(--text-primary)' }}>
-                Craftsmanship & Provenance
-              </h2>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+                <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.45rem', fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>
+                  Craftsmanship Story & Specifications
+                </h2>
+
+                {/* AI Product Description Button (Section 2) */}
+                <button
+                  type="button"
+                  onClick={handleOpenAiModal}
+                  className="btn btn-secondary btn-sm"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    borderColor: 'var(--accent-burgundy)',
+                    color: 'var(--accent-burgundy)'
+                  }}
+                >
+                  <Sparkles size={14} color="var(--accent-burgundy)" />
+                  <span>Generate with AI</span>
+                </button>
+              </div>
 
               <div className="form-group">
                 <label className="form-label" htmlFor="description">
@@ -991,6 +1122,9 @@ export const Sell = () => {
                   placeholder="Detail the firing method, joinery technique, wood patina, or architectural history..."
                   required
                 />
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px', display: 'block' }}>
+                  You can compose your description manually or click "Generate with AI" above to generate a draft using your product specifications.
+                </span>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
@@ -1048,362 +1182,259 @@ export const Sell = () => {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
-                  padding: '12px 14px',
                   backgroundColor: 'rgba(158, 58, 58, 0.08)',
                   border: '1px solid rgba(158, 58, 58, 0.25)',
                   borderRadius: 'var(--radius-xs)',
+                  padding: '12px 16px',
+                  marginBottom: '20px',
                   color: 'var(--error-color)',
-                  fontSize: '12.5px',
-                  marginBottom: '20px'
+                  fontSize: '13px'
                 }}
               >
-                <AlertCircle size={16} style={{ flexShrink: 0 }} />
+                <AlertCircle size={16} />
                 <span>{formError}</span>
               </div>
             )}
 
-            {/* Prominent Burgundy Submit for Approval Button */}
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="btn btn-burgundy"
-              style={{
-                width: '100%',
-                height: '48px',
-                fontSize: '13px',
-                fontWeight: 600,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                opacity: isSubmitting ? 0.75 : 1,
-                cursor: isSubmitting ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  <span>Submitting for Atelier Review...</span>
-                </>
-              ) : (
-                <>
-                  <ShieldCheck size={16} />
-                  <span>
-                    {listingType === 'auction' ? 'Submit for Approval' : 'Publish Marketplace Listing'}
-                  </span>
-                </>
-              )}
-            </button>
-          </form>
+            {/* Submit Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => navigate('/my-products')}
+                className="btn btn-secondary"
+                disabled={isSubmitting}
+              >
+                Cancel
+              </button>
 
-          {/* RIGHT COLUMN: Live Interactive Product Preview */}
-          <div style={{ position: 'sticky', top: '96px' }}>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="btn btn-burgundy"
+                style={{ height: '46px', padding: '0 28px', fontSize: '13.5px', gap: '8px' }}
+              >
+                {isSubmitting ? <Loader2 size={16} className="spinning" /> : <Gavel size={16} />}
+                <span>{listingType === 'auction' ? 'Register & Schedule Auction Lot' : 'Publish to Marketplace'}</span>
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      {/* AI Product Description Generator Modal (Section 2) */}
+      {showAiModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            backdropFilter: 'blur(3px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '16px'
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 'var(--radius-xs)',
+              width: '100%',
+              maxWidth: '680px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              padding: '28px',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.2)'
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Eye size={15} color="var(--accent-burgundy)" />
-                <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.08em',
-                    color: 'var(--text-secondary)'
-                  }}
-                >
-                  Live Product Preview
-                </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sparkles size={22} color="var(--accent-burgundy)" />
+                <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.4rem', margin: 0 }}>
+                  Generate Description with AI (OpenAI)
+                </h3>
               </div>
-              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                Updates in real-time
-              </span>
+              <button
+                type="button"
+                onClick={() => setShowAiModal(false)}
+                style={{ border: 'none', backgroundColor: 'transparent', cursor: 'pointer', color: 'var(--text-secondary)' }}
+              >
+                <XCircle size={20} />
+              </button>
             </div>
 
-            {/* Preview Card */}
-            <div
-              style={{
-                backgroundColor: '#FFFFFF',
-                border: '1px solid var(--border-color)',
-                borderRadius: 'var(--radius-xs)',
-                overflow: 'hidden',
-                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.04)'
-              }}
-            >
-              {/* Main Product Image Container */}
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '20px' }}>
+              Provide the verified details of your item below. The configured OpenAI model will generate a concise, truthful description based <strong>only</strong> on these facts. You can review, edit, and approve it before saving.
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                  Brand / Maker
+                </label>
+                <input
+                  type="text"
+                  value={aiDetails.brand}
+                  onChange={(e) => setAiDetails({ ...aiDetails, brand: e.target.value })}
+                  placeholder="e.g. Pierre Jeanneret"
+                  className="form-input"
+                  style={{ height: '34px', fontSize: '12px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                  Model / Identifier
+                </label>
+                <input
+                  type="text"
+                  value={aiDetails.model}
+                  onChange={(e) => setAiDetails({ ...aiDetails, model: e.target.value })}
+                  placeholder="e.g. PJ-SI-028-A"
+                  className="form-input"
+                  style={{ height: '34px', fontSize: '12px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                  Condition
+                </label>
+                <input
+                  type="text"
+                  value={aiDetails.condition}
+                  onChange={(e) => setAiDetails({ ...aiDetails, condition: e.target.value })}
+                  placeholder="e.g. Museum restored, minor patina"
+                  className="form-input"
+                  style={{ height: '34px', fontSize: '12px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                  Age / Period
+                </label>
+                <input
+                  type="text"
+                  value={aiDetails.age}
+                  onChange={(e) => setAiDetails({ ...aiDetails, age: e.target.value })}
+                  placeholder="e.g. c. 1956"
+                  className="form-input"
+                  style={{ height: '34px', fontSize: '12px' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                  Key Features & Specifications
+                </label>
+                <textarea
+                  rows={2}
+                  value={aiDetails.features}
+                  onChange={(e) => setAiDetails({ ...aiDetails, features: e.target.value })}
+                  placeholder="e.g. Solid Burma teak joinery, natural woven cane..."
+                  className="form-textarea"
+                  style={{ fontSize: '12px', padding: '8px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                  Known Defects or Wear
+                </label>
+                <textarea
+                  rows={2}
+                  value={aiDetails.defects}
+                  onChange={(e) => setAiDetails({ ...aiDetails, defects: e.target.value })}
+                  placeholder="e.g. Slight surface patina consistent with age..."
+                  className="form-textarea"
+                  style={{ fontSize: '12px', padding: '8px' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                Seller-Provided Authenticity & Provenance
+              </label>
+              <input
+                type="text"
+                value={aiDetails.authenticity}
+                onChange={(e) => setAiDetails({ ...aiDetails, authenticity: e.target.value })}
+                placeholder="e.g. Documented stenciled archival markings on rear apron"
+                className="form-input"
+                style={{ height: '34px', fontSize: '12px' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '16px' }}>
+              <button
+                type="button"
+                onClick={handleGenerateAiDescription}
+                disabled={aiLoading}
+                className="btn btn-burgundy btn-sm"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                {aiLoading ? <Loader2 size={14} className="spinning" /> : <Sparkles size={14} />}
+                <span>{aiGeneratedText ? 'Regenerate Draft' : 'Generate Description'}</span>
+              </button>
+            </div>
+
+            {aiError && (
               <div
                 style={{
-                  width: '100%',
-                  aspectRatio: '4 / 3',
-                  backgroundColor: 'var(--surface-secondary)',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
+                  backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                  border: '1px solid rgba(255, 193, 7, 0.4)',
+                  borderRadius: 'var(--radius-xs)',
+                  padding: '10px 14px',
+                  marginBottom: '16px',
+                  fontSize: '12px',
+                  color: '#856404'
                 }}
               >
-                {images.length > 0 ? (
-                  <img
-                    src={images[0]}
-                    alt={formData.name || 'Authoritative Lot Preview'}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                ) : (
-                  <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '24px' }}>
-                    <Camera size={36} strokeWidth={1.5} style={{ opacity: 0.35, marginBottom: '8px' }} />
-                    <span style={{ fontSize: '12px', display: 'block', letterSpacing: '0.02em' }}>
-                      Select or upload photography
-                    </span>
-                  </div>
-                )}
-
-                {/* Handmade / Category Badge */}
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: '12px',
-                    left: '12px',
-                    padding: '3px 8px',
-                    backgroundColor: 'rgba(248, 247, 244, 0.94)',
-                    backdropFilter: 'blur(4px)',
-                    fontSize: '10px',
-                    fontWeight: 700,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                    color: 'var(--accent-burgundy)',
-                    borderRadius: 'var(--radius-xs)'
-                  }}
-                >
-                  {formData.category}
-                </span>
-
-                {/* Auction Lot Badge */}
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: '12px',
-                    right: '12px',
-                    padding: '3px 9px',
-                    backgroundColor: listingType === 'auction' ? 'var(--accent-burgundy)' : '#191919',
-                    color: '#FFFFFF',
-                    fontSize: '10px',
-                    fontWeight: 700,
-                    letterSpacing: '0.06em',
-                    borderRadius: 'var(--radius-xs)'
-                  }}
-                >
-                  {listingType === 'auction' ? 'AUCTION LOT' : 'MARKETPLACE'}
-                </span>
+                {aiError}
               </div>
+            )}
 
-              {/* Gallery Thumbnails Strip (if multiple photos attached) */}
-              {images.length > 1 && (
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: '6px',
-                    padding: '8px 16px',
-                    backgroundColor: 'var(--bg-primary)',
-                    borderBottom: '1px solid var(--border-color)',
-                    overflowX: 'auto'
-                  }}
-                >
-                  {images.map((img, i) => (
-                    <img
-                      key={i}
-                      src={img}
-                      alt={`Thumb ${i + 1}`}
-                      style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '2px',
-                        objectFit: 'cover',
-                        border: i === 0 ? '1.5px solid var(--accent-burgundy)' : '1px solid var(--border-color)'
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {/* Body Content */}
-              <div style={{ padding: '22px' }}>
-                <h3
-                  style={{
-                    fontFamily: 'var(--font-serif)',
-                    fontSize: '1.35rem',
-                    fontWeight: 600,
-                    lineHeight: 1.25,
-                    marginBottom: '4px',
-                    color: 'var(--text-primary)'
-                  }}
-                >
-                  {formData.name || 'Untitled Object'}
-                </h3>
-
-                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-                  {formData.seller || 'Independent Maker'} • {formData.location || 'Studio'}
-                </p>
-
-                {/* Pricing / Bid Block */}
-                <div
-                  style={{
-                    backgroundColor: 'var(--bg-primary)',
-                    padding: '12px 14px',
-                    borderRadius: 'var(--radius-xs)',
-                    border: '1px solid var(--border-color)',
-                    marginBottom: '14px'
-                  }}
-                >
-                  {listingType === 'auction' ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                      <div>
-                        <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-secondary)', display: 'block' }}>
-                          Starting Bid
-                        </span>
-                        <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-burgundy)', fontVariantNumeric: 'tabular-nums' }}>
-                          {formatINR(Number(formData.startingBid) || 0)}
-                        </span>
-                      </div>
-                      <div>
-                        <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-secondary)', display: 'block' }}>
-                          Est. Lot Value
-                        </span>
-                        <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-                          {formatINR(Number(formData.price) || 0)}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-secondary)', display: 'block' }}>
-                        Marketplace Price
-                      </span>
-                      <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-                        {formatINR(Number(formData.price) || 0)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Auction Timing Summary in Preview */}
-                {listingType === 'auction' && calculatedSchedule && (
-                  <div
-                    style={{
-                      borderLeft: '2px solid var(--accent-burgundy)',
-                      paddingLeft: '10px',
-                      marginBottom: '14px',
-                      fontSize: '11px',
-                      color: 'var(--text-secondary)',
-                      lineHeight: 1.5
-                    }}
-                  >
-                    <div>
-                      <strong style={{ color: 'var(--text-primary)' }}>Opening:</strong> {calculatedSchedule.startFormatted}
-                    </div>
-                    <div>
-                      <strong style={{ color: 'var(--text-primary)' }}>Closing:</strong> {calculatedSchedule.endFormatted} ({formData.durationDays} days)
-                    </div>
-                  </div>
-                )}
-
-                {/* Description Preview */}
-                {formData.description && (
-                  <p
-                    style={{
-                      fontSize: 'var(--text-xs)',
-                      color: 'var(--text-secondary)',
-                      lineHeight: 1.55,
-                      margin: 0,
-                      display: '-webkit-box',
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden'
-                    }}
-                  >
-                    {formData.description}
-                  </p>
-                )}
+            {/* Editable Review Area */}
+            {aiGeneratedText && (
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-primary)', display: 'block', marginBottom: '6px' }}>
+                  Review and Edit Generated Description Before Applying:
+                </label>
+                <textarea
+                  rows={5}
+                  value={aiGeneratedText}
+                  onChange={(e) => setAiGeneratedText(e.target.value)}
+                  className="form-textarea"
+                  style={{ fontSize: '12.5px', lineHeight: 1.5, backgroundColor: 'var(--bg-primary)' }}
+                />
               </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+              <button
+                type="button"
+                onClick={() => setShowAiModal(false)}
+                className="btn btn-secondary btn-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyAiDescription}
+                disabled={!aiGeneratedText.trim()}
+                className="btn btn-burgundy btn-sm"
+              >
+                Approve & Insert into Listing
+              </button>
             </div>
           </div>
         </div>
-
-        {/* Existing Submitted Atelier Listings Quick Preview */}
-        {customProducts.length > 0 && (
-          <div style={{ marginTop: '56px', borderTop: '1px solid var(--border-color)', paddingTop: '32px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
-              <h3 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.35rem', fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>
-                Your Atelier Catalog Submissions ({customProducts.length})
-              </h3>
-              <Link to="/my-products" style={{ fontSize: '12px', color: 'var(--accent-burgundy)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                <span>Manage all listings</span>
-                <ArrowRight size={13} />
-              </Link>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
-              {customProducts.slice(0, 4).map((item) => (
-                <div
-                  key={item.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '12px 14px',
-                    border: '1px solid var(--border-color)',
-                    backgroundColor: '#FFFFFF',
-                    borderRadius: 'var(--radius-xs)',
-                    gap: '14px'
-                  }}
-                >
-                  <img
-                    src={item.image}
-                    alt={item.name}
-                    style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: 'var(--radius-xs)' }}
-                  />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <h4 style={{ fontSize: '13px', margin: '0 0 2px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {item.name}
-                    </h4>
-                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block' }}>
-                      {item.category} • {formatINR(item.isAuction ? item.startingBid : item.price)}
-                    </span>
-                  </div>
-                  <span
-                    style={{
-                      fontSize: '10px',
-                      padding: '2px 7px',
-                      borderRadius: 'var(--radius-xs)',
-                      backgroundColor: item.listingStatus === 'active' ? 'var(--badge-shipping-bg)' : 'rgba(234, 228, 220, 0.7)',
-                      color: item.listingStatus === 'active' ? 'var(--badge-shipping-text)' : '#7A6A56',
-                      fontWeight: 600,
-                      textTransform: 'capitalize'
-                    }}
-                  >
-                    {item.listingStatus || 'Pending'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-      </div>
-
-      <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        .animate-spin {
-          animation: spin 1s linear infinite;
-        }
-        @media (max-width: 960px) {
-          .sell-page-grid {
-            grid-template-columns: 1fr !important;
-          }
-        }
-      `}</style>
+      )}
     </div>
   );
 };

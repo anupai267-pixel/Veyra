@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { INITIAL_LIVE_AUCTIONS, UPCOMING_AUCTIONS, DEMO_AUCTION_IDS, getDemoBaselineAuction } from '../data/auctions';
 import { useToast } from './ToastContext';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 const AuctionContext = createContext(null);
 const AUCTIONS_STORAGE_KEY = 'veyra_live_auctions_data';
@@ -10,11 +9,12 @@ const REMINDERS_STORAGE_KEY = 'veyra_auction_reminders';
 const REGISTRATIONS_STORAGE_KEY = 'veyra_auction_registrations';
 const USER_BIDS_STORAGE_KEY = 'veyra_user_bids_history';
 const AUCTION_COMMENTS_KEY = 'veyra_auction_comments';
+const AUTO_BIDS_STORAGE_KEY = 'veyra_user_auto_bids';
 
 export const AuctionProvider = ({ children }) => {
   const { addToast } = useToast();
 
-  // 1. Base Live Auctions state
+  // 1. Authoritative Live Auctions state
   const [liveAuctions, setLiveAuctions] = useState(() => {
     const now = Date.now();
     try {
@@ -23,8 +23,8 @@ export const AuctionProvider = ({ children }) => {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map((auc) => {
-            const end = auc.endTimestamp || auc.endTime || (now + (auc.endsInSeconds || 3600) * 1000);
-            const start = auc.startTimestamp || auc.scheduledTimestamp || (end - (auc.endsInSeconds || 7200) * 1000);
+            const start = auc.startTimestamp || auc.scheduledTimestamp || (now - 3600000);
+            const end = auc.endTimestamp || auc.endTime || (start + (auc.endsInSeconds || 7200) * 1000);
             const isStarted = now >= start;
             const isEnded = now >= end;
             const status = isEnded ? 'ended' : isStarted ? 'active' : 'upcoming';
@@ -35,6 +35,7 @@ export const AuctionProvider = ({ children }) => {
               scheduledTimestamp: start,
               endTimestamp: end,
               endTime: end,
+              minIncrement: Number(auc.minIncrement || 50),
               status,
               remainingSeconds: remaining
             };
@@ -45,25 +46,36 @@ export const AuctionProvider = ({ children }) => {
       console.warn('Failed to parse saved auctions', e);
     }
 
-    return INITIAL_LIVE_AUCTIONS.map((auc) => ({
-      ...auc,
-      startTimestamp: now - 60000,
-      scheduledTimestamp: now - 60000,
-      endTimestamp: now + auc.endsInSeconds * 1000,
-      endTime: now + auc.endsInSeconds * 1000,
-      remainingSeconds: auc.endsInSeconds,
-      status: auc.endsInSeconds > 0 ? 'active' : 'ended',
-      winner: null
-    }));
+    return INITIAL_LIVE_AUCTIONS.map((auc, idx) => {
+      const isUpcoming = idx === 3;
+      const start = isUpcoming ? now + 3600000 : now - 3600000;
+      const durationMs = (auc.endsInSeconds || 7200) * 1000;
+      const end = start + durationMs;
+      const isStarted = now >= start;
+      const isEnded = now >= end;
+      const status = isEnded ? 'ended' : isStarted ? 'active' : 'upcoming';
+      const remaining = isEnded ? 0 : isStarted ? Math.max(0, Math.floor((end - now) / 1000)) : Math.max(0, Math.floor((start - now) / 1000));
+
+      return {
+        ...auc,
+        startTimestamp: start,
+        scheduledTimestamp: start,
+        endTimestamp: end,
+        endTime: end,
+        minIncrement: Number(auc.minIncrement || 100),
+        remainingSeconds: remaining,
+        status,
+        winner: null
+      };
+    });
   });
 
-  // 2. Custom Seller-Submitted Auctions (Pending, Scheduled, Active, or Ended)
+  // 2. Custom Seller-Submitted Auctions
   const [customAuctions, setCustomAuctions] = useState(() => {
     try {
       const saved = localStorage.getItem(CUSTOM_AUCTIONS_STORAGE_KEY);
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
-      console.warn('Failed to parse custom auctions', e);
       return [];
     }
   });
@@ -71,48 +83,46 @@ export const AuctionProvider = ({ children }) => {
   // 3. Base Upcoming auctions
   const [baseUpcomingAuctions] = useState(UPCOMING_AUCTIONS);
 
-  // 4. User auction registrations
+  // 4. User registrations & reminders
   const [registrations, setRegistrations] = useState(() => {
     try {
       const saved = localStorage.getItem(REGISTRATIONS_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : ['up-1']; // Seed up-1 for initial demonstration
+      return saved ? JSON.parse(saved) : ['up-1'];
     } catch (e) {
       return [];
     }
   });
 
-  // 5. User auction reminders
   const [reminders, setReminders] = useState(() => {
     try {
       const saved = localStorage.getItem(REMINDERS_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : ['up-2']; // Seed up-2
+      return saved ? JSON.parse(saved) : ['up-2'];
     } catch (e) {
       return [];
     }
   });
 
-  // 6. User bids history (for My Bids in Account)
+  // 5. User bids history (for My Bids in Account)
   const [userBids, setUserBids] = useState(() => {
     try {
       const saved = localStorage.getItem(USER_BIDS_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [
-        {
-          id: 'user-b-1',
-          auctionId: 'auc-1',
-          auctionTitle: 'Archival Chandigarh Teak & Cane V-Leg Chair (c. 1956)',
-          amount: 96000,
-          time: '1 hour ago',
-          timestamp: Date.now() - 3600000,
-          status: 'Leading',
-          image: 'https://images.unsplash.com/photo-1580481077195-c3a821a58875?auto=format&fit=crop&w=400&q=80'
-        }
-      ];
+      return saved ? JSON.parse(saved) : [];
     } catch (e) {
       return [];
     }
   });
 
-  // 7. Live auction comments / chat feeds
+  // 6. User Auto-Bids store (buyer private configurations: auctionId -> config)
+  const [autoBids, setAutoBids] = useState(() => {
+    try {
+      const saved = localStorage.getItem(AUTO_BIDS_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  // 7. Live auction comments / chat feeds with deduplication
   const [comments, setComments] = useState(() => {
     try {
       const saved = localStorage.getItem(AUCTION_COMMENTS_KEY);
@@ -128,74 +138,82 @@ export const AuctionProvider = ({ children }) => {
     }
   });
 
+  // Fetch initial authoritative auctions from backend if available
+  useEffect(() => {
+    let mounted = true;
+    fetch('/api/auctions')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!mounted || !data || !Array.isArray(data.auctions)) return;
+        setLiveAuctions((prev) => {
+          // Merge server data seamlessly
+          const serverMap = new Map(data.auctions.map((a) => [a.id, a]));
+          return prev.map((localAuc) => {
+            const serverAuc = serverMap.get(localAuc.id);
+            if (!serverAuc) return localAuc;
+            return {
+              ...localAuc,
+              ...serverAuc,
+              currentBid: serverAuc.currentBid || localAuc.currentBid,
+              bidCount: serverAuc.bidCount ?? localAuc.bidCount,
+              bidHistory: serverAuc.bidHistory || localAuc.bidHistory || []
+            };
+          });
+        });
+      })
+      .catch(() => {
+        // Fallback to client state
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   // Persistence effects
   useEffect(() => {
     try {
       localStorage.setItem(AUCTIONS_STORAGE_KEY, JSON.stringify(liveAuctions));
-    } catch (e) {
-      console.warn('Failed to save auctions to localStorage', e);
-    }
+    } catch (e) {}
   }, [liveAuctions]);
 
   useEffect(() => {
     try {
       localStorage.setItem(CUSTOM_AUCTIONS_STORAGE_KEY, JSON.stringify(customAuctions));
-    } catch (e) {
-      console.warn('Failed to save custom auctions to localStorage', e);
-    }
+    } catch (e) {}
   }, [customAuctions]);
 
   useEffect(() => {
     try {
       localStorage.setItem(REGISTRATIONS_STORAGE_KEY, JSON.stringify(registrations));
-    } catch (e) {
-      console.warn('Failed to save registrations to localStorage', e);
-    }
+    } catch (e) {}
   }, [registrations]);
 
   useEffect(() => {
     try {
       localStorage.setItem(REMINDERS_STORAGE_KEY, JSON.stringify(reminders));
-    } catch (e) {
-      console.warn('Failed to save reminders to localStorage', e);
-    }
+    } catch (e) {}
   }, [reminders]);
 
   useEffect(() => {
     try {
       localStorage.setItem(USER_BIDS_STORAGE_KEY, JSON.stringify(userBids));
-    } catch (e) {
-      console.warn('Failed to save user bids to localStorage', e);
-    }
+    } catch (e) {}
   }, [userBids]);
 
   useEffect(() => {
     try {
+      localStorage.setItem(AUTO_BIDS_STORAGE_KEY, JSON.stringify(autoBids));
+    } catch (e) {}
+  }, [autoBids]);
+
+  useEffect(() => {
+    try {
       localStorage.setItem(AUCTION_COMMENTS_KEY, JSON.stringify(comments));
-    } catch (e) {
-      console.warn('Failed to save comments to localStorage', e);
-    }
+    } catch (e) {}
   }, [comments]);
 
-  // Listen for storage events (e.g. status updates from MyProducts across tabs/contexts)
-  useEffect(() => {
-    const handleStorageChange = (e) => {
-      if (!e.key || e.key === CUSTOM_AUCTIONS_STORAGE_KEY) {
-        try {
-          const fresh = localStorage.getItem(CUSTOM_AUCTIONS_STORAGE_KEY);
-          if (fresh) {
-            setCustomAuctions(JSON.parse(fresh));
-          }
-        } catch (err) {
-          // ignore
-        }
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  // Cross-tab broadcast listener for synchronized multi-tab bidding & chat
+  // Synchronized cross-tab broadcast listener with strict message deduplication
   useEffect(() => {
     let broadcast;
     if (typeof BroadcastChannel !== 'undefined') {
@@ -210,10 +228,17 @@ export const AuctionProvider = ({ children }) => {
             prev.map((auc) => (auc.id === payload.auctionId ? payload.updatedAuction : auc))
           );
         } else if (type === 'COMMENT_ADDED') {
-          setComments((prev) => ({
-            ...prev,
-            [payload.auctionId]: [...(prev[payload.auctionId] || []), payload.comment]
-          }));
+          // Strict deduplication by ID
+          setComments((prev) => {
+            const lotList = prev[payload.auctionId] || [];
+            if (lotList.some((c) => c.id === payload.comment.id)) {
+              return prev; // already present, avoid duplicate echo
+            }
+            return {
+              ...prev,
+              [payload.auctionId]: [...lotList, payload.comment]
+            };
+          });
         } else if (type === 'AUCTION_RESET') {
           if (payload.updatedAuctions) {
             setLiveAuctions(payload.updatedAuctions);
@@ -240,7 +265,7 @@ export const AuctionProvider = ({ children }) => {
       setLiveAuctions((prevAuctions) => {
         let hasChanges = false;
         const updated = prevAuctions.map((auc) => {
-          const start = auc.startTimestamp || (auc.endTimestamp - (auc.endsInSeconds || 7200) * 1000);
+          const start = auc.startTimestamp || 0;
           const end = auc.endTimestamp || auc.endTime || (start + 3600000);
 
           let targetStatus;
@@ -279,16 +304,15 @@ export const AuctionProvider = ({ children }) => {
         return hasChanges ? updated : prevAuctions;
       });
 
-      // 2. Check and tick approved custom auctions
+      // 2. Tick custom auctions
       setCustomAuctions((prevCustom) => {
         let hasChanges = false;
         const updated = prevCustom.map((auc) => {
-          // Only approved auctions participate in the live lifecycle
           if (auc.approvalStatus !== 'approved') {
             return auc;
           }
 
-          const start = auc.scheduledTimestamp || auc.startTimestamp || 0;
+          const start = auc.startTimestamp || auc.scheduledTimestamp || 0;
           const end = auc.endTimestamp || auc.endTime || (start + 86400000);
 
           let targetStatus;
@@ -335,9 +359,9 @@ export const AuctionProvider = ({ children }) => {
   const activeApprovedCustomAuctions = useMemo(() => {
     const now = Date.now();
     return customAuctions
-      .filter((a) => a.approvalStatus === 'approved' && now >= a.scheduledTimestamp)
+      .filter((a) => a.approvalStatus === 'approved' && now >= (a.startTimestamp || a.scheduledTimestamp || 0))
       .map((a) => {
-        const remaining = Math.max(0, Math.floor((a.endTimestamp - now) / 1000));
+        const remaining = Math.max(0, Math.floor(((a.endTimestamp || a.endTime) - now) / 1000));
         const isEnded = remaining <= 0;
         return {
           ...a,
@@ -347,437 +371,266 @@ export const AuctionProvider = ({ children }) => {
       });
   }, [customAuctions]);
 
-  // Combined Live Auctions (base + approved active custom auctions)
+  // Combined Live Auctions
   const combinedLiveAuctions = useMemo(() => {
     return [...liveAuctions, ...activeApprovedCustomAuctions];
   }, [liveAuctions, activeApprovedCustomAuctions]);
 
-  // Approved scheduled upcoming custom auctions (in the future)
+  // Combined Upcoming Auctions
   const upcomingApprovedCustomAuctions = useMemo(() => {
     const now = Date.now();
     return customAuctions
-      .filter((a) => a.approvalStatus === 'approved' && now < a.scheduledTimestamp)
+      .filter((a) => a.approvalStatus === 'approved' && now < (a.startTimestamp || a.scheduledTimestamp || 0))
       .map((a) => ({
         ...a,
         thumbnail: a.image || (a.images && a.images[0]) || ''
       }));
   }, [customAuctions]);
 
-  // Combined Upcoming Auctions
   const combinedUpcomingAuctions = useMemo(() => {
     return [...baseUpcomingAuctions, ...upcomingApprovedCustomAuctions];
   }, [baseUpcomingAuctions, upcomingApprovedCustomAuctions]);
 
-  // Create & Register a New Auction Lot (Saved with pending approval)
-  const createAuctionLot = useCallback((lotData) => {
-    // Validate required fields
-    if (!lotData.name || !lotData.seller || !lotData.startingBid) {
-      return { success: false, error: 'Title, seller, and starting bid are required.' };
-    }
-
-    const startingBidNum = Number(lotData.startingBid);
-    const estimatedValueNum = Number(lotData.estimatedValue || lotData.price || startingBidNum);
-
-    if (isNaN(startingBidNum) || startingBidNum <= 0) {
-      return { success: false, error: 'Starting bid must be a valid positive amount.' };
-    }
-
-    if (isNaN(estimatedValueNum) || estimatedValueNum <= 0) {
-      return { success: false, error: 'Estimated lot value must be a valid positive amount.' };
-    }
-
-    if (startingBidNum > estimatedValueNum) {
-      return { success: false, error: 'Starting bid cannot exceed the estimated lot value.' };
-    }
-
-    // Parse start date and time
-    if (!lotData.startDate || !lotData.startTime) {
-      return { success: false, error: 'Auction start date and time are required.' };
-    }
-
-    const startTimestamp = new Date(`${lotData.startDate}T${lotData.startTime}`).getTime();
-    if (isNaN(startTimestamp)) {
-      return { success: false, error: 'Invalid auction start date or time format.' };
-    }
-
-    if (startTimestamp <= Date.now()) {
-      return { success: false, error: 'Auction start time must be scheduled in the future.' };
-    }
-
-    const durationDaysNum = parseFloat(lotData.durationDays);
-    if (isNaN(durationDaysNum) || durationDaysNum <= 0) {
-      return { success: false, error: 'Auction duration must be at least 0.1 days.' };
-    }
-
-    const endTimestamp = startTimestamp + Math.round(durationDaysNum * 86400000);
-    const endsInSeconds = Math.max(0, Math.floor((endTimestamp - startTimestamp) / 1000));
-    const minIncrement = Math.max(500, Math.round((startingBidNum * 0.05) / 500) * 500);
-
-    // Human-readable formatted scheduled session
-    const startDateObj = new Date(startTimestamp);
-    const dateFormatted = startDateObj.toLocaleDateString('en-GB', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric'
-    });
-    const timeFormatted = startDateObj.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-    const scheduledDateStr = `${dateFormatted} • ${timeFormatted} IST`;
-
-    const primaryImage = lotData.image || (lotData.images && lotData.images[0]) || '';
-    const imagesList = lotData.images && lotData.images.length > 0 ? lotData.images : [primaryImage];
-
-    const newLot = {
-      id: 'auc-lot-' + Date.now(),
-      productId: lotData.productId || ('prod-' + Date.now()),
-      name: lotData.name.trim(),
-      maker: lotData.maker || lotData.seller,
-      seller: lotData.seller.trim(),
-      sellerId: lotData.sellerId,
-      location: lotData.location || 'Studio Atelier',
-      provenance: lotData.provenance || 'Authenticated studio masterwork',
-      category: lotData.category || 'Handmade',
-      startingBid: startingBidNum,
-      currentBid: startingBidNum,
-      estimatedValue: estimatedValueNum,
-      minIncrement: minIncrement,
-      bidCount: 0,
-      bidHistory: [],
-      scheduledDate: scheduledDateStr,
-      scheduledTimestamp: startTimestamp,
-      startDate: lotData.startDate,
-      startTime: lotData.startTime,
-      durationDays: durationDaysNum,
-      endTime: endTimestamp,
-      endTimestamp: endTimestamp,
-      endsInSeconds: endsInSeconds,
-      remainingSeconds: endsInSeconds,
-      // Approval lifecycle status
-      approvalStatus: 'pending', // 'pending' | 'approved' | 'rejected'
-      status: 'pending',         // 'pending' | 'scheduled' | 'active' | 'ended'
-      winner: null,
-      image: primaryImage,
-      images: imagesList,
-      description: lotData.description || '',
-      dimensions: lotData.dimensions || '',
-      materials: lotData.materials || '',
-      condition: lotData.condition || 'Pristine Studio Original',
-      authenticityCertificate: 'Certificate of Provenance & Studio Hallmark',
-      submittedAt: new Date().toISOString()
-    };
-
-    setCustomAuctions((prev) => [newLot, ...prev]);
-    addToast(`"${newLot.name}" submitted successfully for curator approval.`);
-
-    return { success: true, auction: newLot };
-  }, [addToast]);
-
-  // Approve a pending auction lot
-  const approveAuctionLot = useCallback((identifier) => {
-    setCustomAuctions((prev) =>
-      prev.map((auc) => {
-        if (auc.id === identifier || auc.productId === identifier) {
-          const now = Date.now();
-          const isStarted = now >= auc.scheduledTimestamp;
-          const isEnded = now >= auc.endTimestamp;
-          const nextStatus = isEnded ? 'ended' : isStarted ? 'active' : 'scheduled';
-          const remaining = Math.max(0, Math.floor((auc.endTimestamp - now) / 1000));
-          return {
-            ...auc,
-            approvalStatus: 'approved',
-            status: nextStatus,
-            remainingSeconds: remaining
-          };
-        }
-        return auc;
-      })
-    );
-    addToast('Auction lot approved and published.');
-  }, [addToast]);
-
-  // Reject an auction lot
-  const rejectAuctionLot = useCallback((identifier) => {
-    setCustomAuctions((prev) =>
-      prev.map((auc) => {
-        if (auc.id === identifier || auc.productId === identifier) {
-          return {
-            ...auc,
-            approvalStatus: 'rejected',
-            status: 'rejected'
-          };
-        }
-        return auc;
-      })
-    );
-    addToast('Auction lot listing rejected.');
-  }, [addToast]);
-
-  // Safe Demo Auction Reset Function (resets designated demo lots ONLY)
-  const resetDemoAuction = useCallback(
-    (auctionId, options = {}) => {
-      if (!DEMO_AUCTION_IDS.includes(auctionId)) {
-        console.warn(`[Veyra Demo Safe Reset] Auction "${auctionId}" is not a designated demo lot. Aborting.`);
-        return { success: false, error: 'Only designated demo auctions can be reset.' };
+  // Create & Register a New Auction Lot
+  const createAuctionLot = useCallback(
+    async (lotData) => {
+      if (!lotData.name || !lotData.name.trim()) {
+        return { success: false, error: 'Product title is required.' };
+      }
+      if (!lotData.seller || !lotData.seller.trim()) {
+        return { success: false, error: 'Seller or workshop name is required.' };
       }
 
-      const baseline = getDemoBaselineAuction(auctionId);
-      if (!baseline) {
-        return { success: false, error: 'Demo baseline data not found.' };
+      const startingBidNum = Number(lotData.startingBid);
+      if (isNaN(startingBidNum) || startingBidNum <= 0) {
+        return { success: false, error: 'Starting bid must be a valid positive amount in INR.' };
       }
 
+      const minIncrementNum = Number(lotData.minIncrement || 50);
+      if (isNaN(minIncrementNum) || minIncrementNum <= 0) {
+        return { success: false, error: 'Minimum bid increment must be a valid positive amount.' };
+      }
+
+      if (!lotData.startDate || !lotData.startTime) {
+        return { success: false, error: 'Auction start date and time are required.' };
+      }
+
+      // Parse start and end timestamps in Asia/Kolkata
+      let startTimestamp = new Date(`${lotData.startDate}T${lotData.startTime}`).getTime();
+      let endTimestamp = 0;
+
+      if (lotData.endDate && lotData.endTime) {
+        endTimestamp = new Date(`${lotData.endDate}T${lotData.endTime}`).getTime();
+      } else if (lotData.durationDays) {
+        endTimestamp = startTimestamp + Math.round(parseFloat(lotData.durationDays) * 86400000);
+      } else {
+        endTimestamp = startTimestamp + 86400000;
+      }
+
+      if (isNaN(startTimestamp) || isNaN(endTimestamp)) {
+        return { success: false, error: 'Invalid auction start or end date/time format.' };
+      }
+
+      if (endTimestamp <= startTimestamp) {
+        return { success: false, error: 'Auction end time must be strictly later than the start time.' };
+      }
+
+      if (startTimestamp <= Date.now() && !lotData.allowPastStart) {
+        return { success: false, error: 'Auction start time must be scheduled in the future.' };
+      }
+
+      const primaryImage = lotData.image || (lotData.images && lotData.images[0]) || '';
+      const imagesList = lotData.images && lotData.images.length > 0 ? lotData.images : [primaryImage];
+
+      const newLot = {
+        id: 'auc-lot-' + Date.now(),
+        productId: lotData.productId || ('prod-' + Date.now()),
+        name: lotData.name.trim(),
+        maker: lotData.maker || lotData.seller,
+        seller: lotData.seller.trim(),
+        sellerId: lotData.sellerId || 'seller-atelier',
+        location: lotData.location || 'Studio Atelier',
+        provenance: lotData.provenance || 'Authenticated studio masterwork',
+        category: lotData.category || 'Handmade',
+        startingBid: startingBidNum,
+        currentBid: startingBidNum,
+        estimatedValue: Number(lotData.estimatedValue || lotData.price || startingBidNum * 1.5),
+        minIncrement: minIncrementNum,
+        bidCount: 0,
+        bidHistory: [],
+        startTimestamp,
+        endTimestamp,
+        startDate: lotData.startDate,
+        startTime: lotData.startTime,
+        endDate: lotData.endDate,
+        endTime: lotData.endTime,
+        durationDays: lotData.durationDays || (endTimestamp - startTimestamp) / 86400000,
+        remainingSeconds: Math.max(0, Math.floor((endTimestamp - Date.now()) / 1000)),
+        approvalStatus: 'approved',
+        status: startTimestamp <= Date.now() ? 'active' : 'scheduled',
+        winner: null,
+        image: primaryImage,
+        images: imagesList,
+        description: lotData.description || '',
+        materials: lotData.materials || '',
+        dimensions: lotData.dimensions || '',
+        condition: lotData.condition || 'Pristine Studio Original',
+        authenticityCertificate: 'Certificate of Provenance & Studio Hallmark',
+        submittedAt: new Date().toISOString()
+      };
+
+      // Also persist to server endpoint if reachable
+      try {
+        await fetch('/api/auctions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newLot)
+        });
+      } catch (err) {
+        // Fall back to client storage
+      }
+
+      setCustomAuctions((prev) => [newLot, ...prev]);
+      addToast(`"${newLot.name}" created successfully and published to catalogue.`);
+
+      return { success: true, auction: newLot };
+    },
+    [addToast]
+  );
+
+  // Authoritative Bid Placement Function (Manual bidding + Auto-Bid trigger)
+  const placeBid = useCallback(
+    async (auctionId, amount, bidderName = 'Collector', userId = 'user-current') => {
       const now = Date.now();
-      let start = now;
-      let end = now + 30 * 60 * 1000; // default 30 mins
+      const amountNum = Number(amount);
 
-      // Configure start and end times via presets or custom timestamps
-      if (options.preset === '15m') {
-        start = now;
-        end = now + 15 * 60 * 1000;
-      } else if (options.preset === '30m') {
-        start = now;
-        end = now + 30 * 60 * 1000;
-      } else if (options.preset === '1h') {
-        start = now;
-        end = now + 60 * 60 * 1000;
-      } else if (options.preset === '2h') {
-        start = now;
-        end = now + 120 * 60 * 1000;
-      } else if (options.preset === 'upcoming-5m') {
-        start = now + 5 * 60 * 1000;
-        end = start + 30 * 60 * 1000;
-      } else if (options.preset === 'upcoming-15m') {
-        start = now + 15 * 60 * 1000;
-        end = start + 30 * 60 * 1000;
-      } else if (options.startTimestamp && options.endTimestamp) {
-        start = new Date(options.startTimestamp).getTime();
-        end = new Date(options.endTimestamp).getTime();
-      } else if (options.durationMinutes) {
-        start = options.startTimestamp ? new Date(options.startTimestamp).getTime() : now;
-        end = start + Math.max(1, Number(options.durationMinutes)) * 60 * 1000;
-      }
+      // Attempt server-side authoritative bidding first
+      try {
+        const response = await fetch(`/api/auctions/${auctionId}/bid`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: amountNum, bidderName, bidderId: userId })
+        });
 
-      if (isNaN(start) || isNaN(end) || end <= start) {
-        return { success: false, error: 'Invalid start or end time specified.' };
-      }
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.auction) {
+            // Update live auction state from authoritative server response
+            setLiveAuctions((prev) =>
+              prev.map((auc) => (auc.id === auctionId ? { ...auc, ...data.auction } : auc))
+            );
+            setCustomAuctions((prev) =>
+              prev.map((auc) => (auc.id === auctionId ? { ...auc, ...data.auction } : auc))
+            );
 
-      const isStarted = now >= start;
-      const isEnded = now >= end;
-      const targetStatus = isEnded ? 'ended' : isStarted ? 'active' : 'upcoming';
-      const remaining = isEnded ? 0 : isStarted ? Math.floor((end - now) / 1000) : Math.floor((start - now) / 1000);
-      const endsInSeconds = Math.max(0, Math.floor((end - start) / 1000));
+            // Record in user's bids
+            setUserBids((prev) => [
+              {
+                id: 'ub-' + Date.now(),
+                auctionId,
+                auctionTitle: data.auction.name,
+                amount: amountNum,
+                time: 'Just now',
+                timestamp: now,
+                status: 'Leading',
+                image: data.auction.image || ''
+              },
+              ...prev.filter((b) => b.auctionId !== auctionId)
+            ]);
 
-      const resetBids = options.resetBids !== false;
-      const startingBidNum = options.startingBid ? Number(options.startingBid) : baseline.startingBid;
-      const currentBidNum = options.startingBid ? Number(options.startingBid) : baseline.currentBid;
-
-      let updatedAuctionRecord = null;
-
-      setLiveAuctions((prev) => {
-        const nextList = prev.map((auc) => {
-          if (auc.id === auctionId) {
-            const base = resetBids ? baseline : auc;
-            const merged = {
-              ...base,
-              ...auc,
-              startTimestamp: start,
-              scheduledTimestamp: start,
-              endTimestamp: end,
-              endTime: end,
-              endsInSeconds,
-              remainingSeconds: remaining,
-              status: targetStatus,
-              winner: null
-            };
-
-            if (resetBids) {
-              merged.startingBid = startingBidNum;
-              merged.currentBid = currentBidNum;
-              merged.bidCount = baseline.bidCount;
-              merged.bidHistory = baseline.bidHistory || [];
+            // Broadcast to other tabs
+            if (typeof BroadcastChannel !== 'undefined') {
+              try {
+                const bc = new BroadcastChannel('veyra_auction_realtime_sync');
+                bc.postMessage({
+                  type: 'BID_PLACED',
+                  payload: { auctionId, updatedAuction: data.auction }
+                });
+                bc.close();
+              } catch (e) {}
             }
 
-            updatedAuctionRecord = merged;
-            return merged;
+            addToast(`Bid of ₹${amountNum.toLocaleString('en-IN')} placed successfully.`);
+            return { success: true, updatedAuction: data.auction };
+          } else {
+            return { success: false, error: data.error || 'Bid rejected by server.' };
           }
-          return auc;
-        });
-
-        try {
-          localStorage.setItem(AUCTIONS_STORAGE_KEY, JSON.stringify(nextList));
-        } catch (e) {
-          console.warn('Failed saving reset auction to localStorage', e);
-        }
-
-        return nextList;
-      });
-
-      // Clear user bid history only for this specific demo auction lot
-      if (resetBids) {
-        setUserBids((prev) => prev.filter((b) => b.auctionId !== auctionId));
-      }
-
-      // Synchronize across open browser tabs
-      if (typeof BroadcastChannel !== 'undefined' && updatedAuctionRecord) {
-        try {
-          const bc = new BroadcastChannel('veyra_auction_realtime_sync');
-          bc.postMessage({
-            type: 'AUCTION_RESET',
-            payload: { auctionId, updatedAuction: updatedAuctionRecord }
-          });
-          bc.close();
-        } catch (e) {
-          // ignore
-        }
-      }
-
-      const durationMin = Math.round((end - start) / 60000);
-      addToast(`Demo lot "${baseline.name.slice(0, 30)}..." reset to ${targetStatus.toUpperCase()} (${durationMin}m duration).`);
-
-      return { success: true, auction: updatedAuctionRecord };
-    },
-    [addToast]
-  );
-
-  // Safe Demo Reset Function for ALL designated demo auctions
-  const resetAllDemoAuctions = useCallback(
-    (options = {}) => {
-      const now = Date.now();
-      const durationMin = options.durationMinutes ? Number(options.durationMinutes) : 30;
-      const durationMs = durationMin * 60 * 1000;
-
-      let updatedAuctionsList = [];
-
-      setLiveAuctions((prev) => {
-        const nextList = prev.map((auc, index) => {
-          if (DEMO_AUCTION_IDS.includes(auc.id)) {
-            const baseline = getDemoBaselineAuction(auc.id);
-            if (!baseline) return auc;
-
-            const start = now;
-            const end = now + durationMs + index * 60000;
-            const remaining = Math.max(0, Math.floor((end - now) / 1000));
-            const endsIn = Math.max(0, Math.floor((end - start) / 1000));
-
-            return {
-              ...baseline,
-              startTimestamp: start,
-              scheduledTimestamp: start,
-              endTimestamp: end,
-              endTime: end,
-              endsInSeconds: endsIn,
-              remainingSeconds: remaining,
-              status: 'active',
-              winner: null
-            };
+        } else {
+          const errData = await response.json().catch(() => null);
+          if (errData && errData.error) {
+            return { success: false, error: errData.error };
           }
-          return auc;
-        });
-
-        updatedAuctionsList = nextList;
-        try {
-          localStorage.setItem(AUCTIONS_STORAGE_KEY, JSON.stringify(nextList));
-        } catch (e) {}
-
-        return nextList;
-      });
-
-      // Clear demo bids from user bids history
-      setUserBids((prev) => prev.filter((b) => !DEMO_AUCTION_IDS.includes(b.auctionId)));
-
-      if (typeof BroadcastChannel !== 'undefined') {
-        try {
-          const bc = new BroadcastChannel('veyra_auction_realtime_sync');
-          bc.postMessage({
-            type: 'AUCTION_RESET',
-            payload: { updatedAuctions: updatedAuctionsList }
-          });
-          bc.close();
-        } catch (e) {}
+        }
+      } catch (networkErr) {
+        // Fall back to client authoritative engine if backend is offline
       }
 
-      addToast(`All ${DEMO_AUCTION_IDS.length} demo auction lots reset and reopened (${durationMin}m live).`);
-      return { success: true, count: DEMO_AUCTION_IDS.length };
-    },
-    [addToast]
-  );
-
-  // Authoritative Bid Placement Function (supports base & custom auctions)
-  const placeBid = useCallback(
-    (auctionId, amount, bidderName = 'Collector', userId = 'user-current') => {
-      const now = Date.now();
+      // Client-side fallback engine with identical rules
       let outcome = { success: false, error: '' };
 
-      // Helper updater
-      const applyBidToAuction = (auction) => {
+      const applyBid = (auction) => {
         if (!auction) return null;
 
-        const start = auction.startTimestamp || auction.scheduledTimestamp || 0;
+        const start = auction.startTimestamp || 0;
         const end = auction.endTimestamp || auction.endTime || 0;
 
-        // 1. Time / status validation
         if (auction.status === 'ended' || (end > 0 && now >= end) || (auction.remainingSeconds ?? 0) <= 0) {
           outcome = { success: false, error: 'This auction has concluded. Bids are closed.' };
           return auction;
         }
 
         if (auction.status === 'upcoming' || (start > 0 && now < start)) {
-          outcome = { success: false, error: 'This auction has not opened yet. Bidding begins at the scheduled start time.' };
+          outcome = { success: false, error: 'This auction has not opened yet. Bidding begins at scheduled start.' };
           return auction;
         }
 
-        // 2. Minimum amount validation
-        const minAcceptable = auction.currentBid + auction.minIncrement;
-        if (Number(amount) < minAcceptable) {
+        if (auction.sellerId && userId && String(auction.sellerId) === String(userId)) {
+          outcome = { success: false, error: 'Sellers are strictly prohibited from bidding on their own auction lots.' };
+          return auction;
+        }
+
+        const minInc = Number(auction.minIncrement || 50);
+        const minAcceptable = Number(auction.currentBid) + minInc;
+        if (amountNum < minAcceptable) {
           outcome = {
             success: false,
-            error: `Bid must be at least ₹${minAcceptable.toLocaleString('en-IN')}.`
+            error: `Your bid must be at least ₹${minAcceptable.toLocaleString('en-IN')}. The minimum bid increment for this auction is ₹${minInc.toLocaleString('en-IN')}.`
           };
           return auction;
         }
 
-        // 3. Duplicate bid prevention & rapid double-click guard
         const topBid = auction.bidHistory && auction.bidHistory.length > 0 ? auction.bidHistory[0] : null;
         if (topBid) {
-          if (Number(amount) === topBid.amount) {
+          if (amountNum <= Number(topBid.amount)) {
             outcome = {
               success: false,
-              error: `A bid of ₹${Number(amount).toLocaleString('en-IN')} has already been recorded.`
+              error: `A bid of ₹${amountNum.toLocaleString('en-IN')} has already been recorded.`
             };
             return auction;
           }
 
-          if (topBid.bidderId === userId && (now - topBid.timestamp) < 2000) {
+          if (String(topBid.bidderId) === String(userId)) {
             outcome = {
               success: false,
-              error: 'Your bid was just received. Please wait a moment before raising.'
-            };
-            return auction;
-          }
-
-          if (topBid.bidderId === userId && Number(amount) <= topBid.amount) {
-            outcome = {
-              success: false,
-              error: 'You are already the leading bidder.'
+              error: 'You are already the leading bidder on this lot.'
             };
             return auction;
           }
         }
 
         const newRecord = {
-          id: 'b-' + Date.now(),
+          id: 'b-' + now,
           bidder: bidderName,
           bidderId: userId,
-          amount: Number(amount),
+          amount: amountNum,
+          bidType: 'manual',
           time: 'Just now',
           timestamp: now
         };
 
         const updated = {
           ...auction,
-          currentBid: Number(amount),
+          currentBid: amountNum,
           bidCount: (auction.bidCount || 0) + 1,
           bidHistory: [newRecord, ...(auction.bidHistory || [])]
         };
@@ -786,11 +639,10 @@ export const AuctionProvider = ({ children }) => {
         return updated;
       };
 
-      // Try updating in liveAuctions
       setLiveAuctions((prev) => {
         const found = prev.find((a) => a.id === auctionId || a.productId === auctionId);
         if (found) {
-          const updated = applyBidToAuction(found);
+          const updated = applyBid(found);
           if (outcome.success) {
             return prev.map((a) => (a.id === found.id ? updated : a));
           }
@@ -798,11 +650,10 @@ export const AuctionProvider = ({ children }) => {
         return prev;
       });
 
-      // Also try in customAuctions
       setCustomAuctions((prev) => {
         const found = prev.find((a) => a.id === auctionId || a.productId === auctionId);
         if (found) {
-          const updated = applyBidToAuction(found);
+          const updated = applyBid(found);
           if (outcome.success) {
             return prev.map((a) => (a.id === found.id ? updated : a));
           }
@@ -811,9 +662,8 @@ export const AuctionProvider = ({ children }) => {
       });
 
       if (outcome.success) {
-        addToast(`Bid of ₹${Number(amount).toLocaleString('en-IN')} placed successfully.`);
+        addToast(`Bid of ₹${amountNum.toLocaleString('en-IN')} placed successfully.`);
 
-        // Broadcast to other open browser windows
         if (typeof BroadcastChannel !== 'undefined') {
           try {
             const bc = new BroadcastChannel('veyra_auction_realtime_sync');
@@ -822,21 +672,17 @@ export const AuctionProvider = ({ children }) => {
               payload: { auctionId, updatedAuction: outcome.updatedAuction }
             });
             bc.close();
-          } catch (e) {
-            // ignore
-          }
+          } catch (e) {}
         }
 
-        // Record in user's bids history
-        const auctionTitle = outcome.updatedAuction?.name || 'Curated Lot';
         setUserBids((prev) => [
           {
             id: 'ub-' + Date.now(),
             auctionId,
-            auctionTitle,
-            amount: Number(amount),
+            auctionTitle: outcome.updatedAuction?.name || 'Curated Lot',
+            amount: amountNum,
             time: 'Just now',
-            timestamp: Date.now(),
+            timestamp: now,
             status: 'Leading',
             image: outcome.updatedAuction?.image || ''
           },
@@ -849,37 +695,139 @@ export const AuctionProvider = ({ children }) => {
     [addToast]
   );
 
-  // Send auction live comment
-  const sendAuctionComment = (auctionId, message, userName = 'Collector') => {
-    if (!message || !message.trim()) return;
+  // Auto-Bid Agent Configuration Functions
+  const getAutoBidConfig = useCallback(
+    (auctionId, userId) => {
+      if (!auctionId || !userId) return null;
+      const key = `${auctionId}_${userId}`;
+      return autoBids[key] || null;
+    },
+    [autoBids]
+  );
 
-    const newComment = {
-      id: 'c-' + Date.now(),
-      user: userName,
-      message: message.trim(),
-      time: 'Just now',
-      timestamp: Date.now()
-    };
+  const saveAutoBidConfig = useCallback(
+    async ({ auctionId, userId, userName, maxLimit, preferredIncrement, isActive = true }) => {
+      const payload = {
+        auctionId,
+        userId: String(userId),
+        userName: userName || 'Collector',
+        maxLimit: Number(maxLimit),
+        preferredIncrement: Number(preferredIncrement),
+        isActive
+      };
 
-    setComments((prev) => ({
-      ...prev,
-      [auctionId]: [...(prev[auctionId] || []), newComment]
-    }));
+      const key = `${auctionId}_${userId}`;
+      setAutoBids((prev) => ({
+        ...prev,
+        [key]: { ...payload, updatedAt: new Date().toISOString() }
+      }));
 
-    // Broadcast comment
-    if (typeof BroadcastChannel !== 'undefined') {
+      // Send to server Auto-Bid endpoint
       try {
-        const bc = new BroadcastChannel('veyra_auction_realtime_sync');
-        bc.postMessage({
-          type: 'COMMENT_ADDED',
-          payload: { auctionId, comment: newComment }
+        const response = await fetch(`/api/auctions/${auctionId}/auto-bid`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
         });
-        bc.close();
-      } catch (e) {
-        // ignore
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.auction) {
+            setLiveAuctions((prev) =>
+              prev.map((auc) => (auc.id === auctionId ? { ...auc, ...data.auction } : auc))
+            );
+          }
+        }
+      } catch (err) {}
+
+      addToast(
+        isActive
+          ? `Auto-Bid Agent activated (Max: ₹${Number(maxLimit).toLocaleString('en-IN')}).`
+          : 'Auto-Bid Agent paused.'
+      );
+
+      return { success: true, autoBid: payload };
+    },
+    [addToast]
+  );
+
+  const cancelAutoBidConfig = useCallback(
+    async (auctionId, userId) => {
+      const key = `${auctionId}_${userId}`;
+      setAutoBids((prev) => {
+        const copy = { ...prev };
+        delete copy[key];
+        return copy;
+      });
+
+      try {
+        await fetch(`/api/auctions/${auctionId}/auto-bid`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId })
+        });
+      } catch (err) {}
+
+      addToast('Auto-Bid Agent disabled and removed.');
+      return { success: true };
+    },
+    [addToast]
+  );
+
+  // Send auction live comment with stable IDs and strict deduplication
+  const sendAuctionComment = useCallback(
+    (auctionId, message, userName = 'Collector', userId = 'user-current') => {
+      if (!message || !message.trim()) return;
+
+      const commentId = `c-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      const newComment = {
+        id: commentId,
+        auctionId,
+        user: userName,
+        userId,
+        message: message.trim(),
+        time: 'Just now',
+        timestamp: Date.now()
+      };
+
+      // Optimistically add to state if not already present
+      setComments((prev) => {
+        const existing = prev[auctionId] || [];
+        if (existing.some((c) => c.id === commentId)) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [auctionId]: [...existing, newComment]
+        };
+      });
+
+      // Broadcast comment with ID
+      if (typeof BroadcastChannel !== 'undefined') {
+        try {
+          const bc = new BroadcastChannel('veyra_auction_realtime_sync');
+          bc.postMessage({
+            type: 'COMMENT_ADDED',
+            payload: { auctionId, comment: newComment }
+          });
+          bc.close();
+        } catch (e) {}
       }
-    }
-  };
+
+      // Send to server
+      fetch(`/api/auctions/${auctionId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: newComment.message,
+          userName: newComment.user,
+          userId: newComment.userId,
+          clientMessageId: commentId
+        })
+      }).catch(() => {});
+    },
+    []
+  );
 
   // Registrations management
   const isRegistered = (auctionId) => registrations.includes(auctionId);
@@ -920,7 +868,6 @@ export const AuctionProvider = ({ children }) => {
       return [];
     }
 
-    // Map highest bid per unique bidder
     const bidderMap = new Map();
     auction.bidHistory.forEach((record) => {
       const existing = bidderMap.get(record.bidder);
@@ -933,13 +880,87 @@ export const AuctionProvider = ({ children }) => {
     return ranked.map((entry, index) => ({
       rank: index + 1,
       bidder: entry.bidder,
+      bidderId: entry.bidderId,
       amount: entry.amount,
+      bidType: entry.bidType || 'manual',
       time: entry.time,
       timestamp: entry.timestamp,
       isLeading: index === 0,
       isWinner: auction.status === 'ended' && index === 0
     }));
   };
+
+  // Safe Demo Reset Function
+  const resetDemoAuction = useCallback(
+    (auctionId, options = {}) => {
+      if (!DEMO_AUCTION_IDS.includes(auctionId)) {
+        return { success: false, error: 'Only designated demo auctions can be reset.' };
+      }
+
+      const baseline = getDemoBaselineAuction(auctionId);
+      if (!baseline) return { success: false, error: 'Baseline not found.' };
+
+      const now = Date.now();
+      const durMin = options.durationMinutes ? Number(options.durationMinutes) : 30;
+      const start = now;
+      const end = now + durMin * 60 * 1000;
+
+      let updatedAuctionRecord = null;
+
+      setLiveAuctions((prev) => {
+        const nextList = prev.map((auc) => {
+          if (auc.id === auctionId) {
+            const merged = {
+              ...baseline,
+              startTimestamp: start,
+              endTimestamp: end,
+              endTime: end,
+              status: 'active',
+              remainingSeconds: durMin * 60,
+              winner: null
+            };
+            updatedAuctionRecord = merged;
+            return merged;
+          }
+          return auc;
+        });
+        return nextList;
+      });
+
+      addToast(`Demo lot reset to active (${durMin}m remaining).`);
+      return { success: true, auction: updatedAuctionRecord };
+    },
+    [addToast]
+  );
+
+  const resetAllDemoAuctions = useCallback(
+    (options = {}) => {
+      const now = Date.now();
+      const durMin = options.durationMinutes ? Number(options.durationMinutes) : 30;
+
+      setLiveAuctions((prev) => {
+        return prev.map((auc, idx) => {
+          if (DEMO_AUCTION_IDS.includes(auc.id)) {
+            const baseline = getDemoBaselineAuction(auc.id) || auc;
+            return {
+              ...baseline,
+              startTimestamp: now,
+              endTimestamp: now + (durMin + idx) * 60 * 1000,
+              endTime: now + (durMin + idx) * 60 * 1000,
+              status: 'active',
+              remainingSeconds: (durMin + idx) * 60,
+              winner: null
+            };
+          }
+          return auc;
+        });
+      });
+
+      addToast(`All demo lots reset to active.`);
+      return { success: true };
+    },
+    [addToast]
+  );
 
   return (
     <AuctionContext.Provider
@@ -948,11 +969,12 @@ export const AuctionProvider = ({ children }) => {
         upcomingAuctions: combinedUpcomingAuctions,
         customAuctions,
         createAuctionLot,
-        approveAuctionLot,
-        rejectAuctionLot,
         placeBid,
         comments,
         sendAuctionComment,
+        getAutoBidConfig,
+        saveAutoBidConfig,
+        cancelAutoBidConfig,
         isRegistered,
         toggleRegistration,
         registrations,

@@ -8,16 +8,20 @@ import {
   Flame,
   Heart,
   ChevronRight,
-  Filter
+  Filter,
+  ExternalLink,
+  Layers,
+  ArrowRight
 } from 'lucide-react';
 import { useAuctions } from '../context/AuctionContext';
 import { useWishlist } from '../context/WishlistContext';
+import { useAuth } from '../context/AuthContext';
 import { formatINR } from '../data/products';
-import { AdminAuctionControls } from '../components/AdminAuctionControls';
 
 export const LiveAuctions = () => {
   const { liveAuctions } = useAuctions();
   const { isInWishlist, toggleWishlist } = useWishlist();
+  const { user } = useAuth();
 
   // Independent Live Auctions Filter State
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -39,7 +43,9 @@ export const LiveAuctions = () => {
   // Authoritative filter: ONLY auctions that are currently active (status active and remainingSeconds > 0)
   const activeLots = useMemo(() => {
     let result = liveAuctions.filter(
-      (auc) => (auc.status === 'active' || (!auc.status && (auc.endsInSeconds || 0) > 0)) && (auc.remainingSeconds ?? 0) > 0
+      (auc) =>
+        (auc.status === 'active' || (!auc.status && (auc.endsInSeconds || 0) > 0)) &&
+        (auc.remainingSeconds ?? 0) > 0
     );
 
     // Category filter
@@ -106,24 +112,45 @@ export const LiveAuctions = () => {
   return (
     <div style={{ paddingTop: '36px', paddingBottom: '96px', backgroundColor: 'var(--bg-primary)' }}>
       <div className="container">
-        {/* Header */}
-        <div style={{ maxWidth: '680px', marginBottom: '32px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span className="badge-live">
-              <span className="dot" />
-              SYNCHRONIZED BIDDING ROOM
-            </span>
+        {/* Header Section */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px', marginBottom: '32px' }}>
+          <div style={{ maxWidth: '680px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <span className="badge-live">
+                <span className="dot" />
+                SYNCHRONIZED BIDDING ROOM
+              </span>
+            </div>
+            <h1 style={{ fontSize: 'clamp(2.2rem, 4vw, 3.2rem)', marginBottom: '10px' }}>
+              Currently Active Auctions
+            </h1>
+            <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              Bidding in real time for single-edition masterworks, authenticated archival furniture, and living art. Only registered lots with active server clocks are displayed.
+            </p>
           </div>
-          <h1 style={{ fontSize: 'clamp(2.2rem, 4vw, 3.2rem)', marginBottom: '10px' }}>
-            Currently Active Auctions
-          </h1>
-          <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            Bidding in real time for single-edition masterworks, authenticated archival furniture, and living art. Only lots with active server clocks are displayed.
-          </p>
-        </div>
 
-        {/* Global Demo Presentation Admin Bar */}
-        <AdminAuctionControls isGlobal={true} />
+          {/* Quick Management Shortcuts */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <Link
+              to="/account"
+              className="btn btn-secondary btn-sm"
+              style={{ height: '36px', fontSize: '12px', gap: '6px' }}
+            >
+              <Hammer size={13} />
+              <span>My Bids & Activity</span>
+            </Link>
+            {user && (user.role === 'artisan' || user.role === 'seller' || user.role === 'admin') && (
+              <Link
+                to="/my-products"
+                className="btn btn-secondary btn-sm"
+                style={{ height: '36px', fontSize: '12px', gap: '6px' }}
+              >
+                <Layers size={13} />
+                <span>Seller Management</span>
+              </Link>
+            )}
+          </div>
+        </div>
 
         {/* Independent Live Auctions Filter Bar */}
         <div
@@ -204,7 +231,9 @@ export const LiveAuctions = () => {
               >
                 <option value="all">All Workshops</option>
                 {activeSellers.map((seller) => (
-                  <option key={seller} value={seller}>{seller}</option>
+                  <option key={seller} value={seller}>
+                    {seller}
+                  </option>
                 ))}
               </select>
             )}
@@ -229,7 +258,16 @@ export const LiveAuctions = () => {
             </select>
 
             {/* Ending Soon Toggle */}
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '12.5px',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer'
+              }}
+            >
               <input
                 type="checkbox"
                 checked={endingSoonOnly}
@@ -305,7 +343,8 @@ export const LiveAuctions = () => {
           >
             {activeLots.map((auction) => {
               const isFav = isInWishlist(auction.productId || auction.id);
-              const minNext = auction.currentBid + auction.minIncrement;
+              const minIncrement = Number(auction.minIncrement || 50);
+              const minNext = auction.currentBid + minIncrement;
 
               return (
                 <article
@@ -365,7 +404,7 @@ export const LiveAuctions = () => {
                       LOT #{auction.id.toUpperCase()}
                     </span>
 
-                    {/* Watchlist */}
+                    {/* Watchlist Button */}
                     <button
                       onClick={(e) => {
                         e.preventDefault();
@@ -447,8 +486,8 @@ export const LiveAuctions = () => {
                           <span style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
                             {formatINR(auction.currentBid)}
                           </span>
-                          <span style={{ fontSize: '10px', color: 'var(--accent-burgundy)', display: 'block' }}>
-                            Next Min: {formatINR(minNext)}
+                          <span style={{ fontSize: '10px', color: 'var(--accent-burgundy)', display: 'block', marginTop: '2px' }}>
+                            Min Inc: +{formatINR(minIncrement)}
                           </span>
                         </div>
 
@@ -473,14 +512,24 @@ export const LiveAuctions = () => {
                         </div>
                       </div>
 
-                      {/* Join Live Action Button */}
+                      {/* Prominent Enter Floor Room Action Button */}
                       <Link
                         to={`/live/${auction.id}`}
                         className="btn btn-burgundy"
-                        style={{ width: '100%', height: '40px', fontSize: '12.5px', fontWeight: 600, letterSpacing: '0.04em' }}
+                        style={{
+                          width: '100%',
+                          height: '42px',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          letterSpacing: '0.04em',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px'
+                        }}
                       >
-                        <Hammer size={14} />
-                        <span>Join Live & Bid</span>
+                        <Hammer size={15} />
+                        <span>Enter Floor Room</span>
                       </Link>
                     </div>
                   </div>
@@ -498,12 +547,17 @@ export const LiveAuctions = () => {
               borderRadius: 'var(--radius-xs)'
             }}
           >
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+            <p style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
               No active auctions currently match your selected filters.
             </p>
-            <button onClick={handleResetFilters} className="btn btn-primary btn-sm">
-              Reset Filters
-            </button>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button onClick={handleResetFilters} className="btn btn-secondary btn-sm">
+                Reset Filters
+              </button>
+              <Link to="/upcoming-lots" className="btn btn-primary btn-sm">
+                View Upcoming Lots
+              </Link>
+            </div>
           </div>
         )}
       </div>
